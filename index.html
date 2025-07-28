@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TSLA–TSLS Profit Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+      color: #333;
+    }
+    h2 { margin-top: 0; }
+    .section { margin-bottom: 20px; }
+    input[type="number"] {
+      padding: 8px;
+      width: 100px;
+      margin-right: 10px;
+    }
+    button {
+      padding: 8px 16px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    #log {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      white-space: pre-line;
+    }
+  </style>
+</head>
+<body>
+  <h2>💹 TSLA–TSLS Two-Way Profit Tracker ($USD)</h2>
+
+  <div class="section">
+    <label>Price In ($): <input type="number" id="priceIn" step="0.01"></label>
+    <label>Price Out ($): <input type="number" id="priceOut" step="0.01"></label>
+    <label>Qty: <input type="number" id="qty" value="1" step="1"></label><br><br>
+    <button onclick="calculateProfit('TSLA')">Sell TSLA</button>
+    <button onclick="calculateProfit('TSLS')">Sell TSLS</button>
+    <button onclick="resetLog()">🔄 Reset All</button>
+  </div>
+
+  <div class="section">
+    <strong>Total Profit ($): </strong><span id="totalProfit">$0.00</span>
+  </div>
+
+  <div id="log" class="section">
+    <strong>Transaction Log:</strong>
+
+  </div>
+
+  <script>
+    let totalProfit = 0;
+
+    function calculateProfit(type) {
+      const priceIn = parseFloat(document.getElementById("priceIn").value);
+      const priceOut = parseFloat(document.getElementById("priceOut").value);
+      const qty = parseInt(document.getElementById("qty").value);
+
+      if (isNaN(priceIn) || isNaN(priceOut) || isNaN(qty)) {
+        alert("Please fill in all fields correctly.");
+        return;
+      }
+
+      const diff = (priceOut - priceIn) * qty;
+      totalProfit += diff;
+      document.getElementById("totalProfit").textContent = "$" + totalProfit.toFixed(2);
+
+      const log = document.getElementById("log");
+      const msg = `${type} | In: $${priceIn} → Out: $${priceOut} | Qty: ${qty} | P/L: $${diff.toFixed(2)}`;
+      log.textContent += msg + "\n";
+    }
+
+    function resetLog() {
+      totalProfit = 0;
+      document.getElementById("totalProfit").textContent = "$0.00";
+      document.getElementById("log").textContent = "Transaction Log:\n";
+    }
+  </script>
+</body>
+</html>
