@@ -3,82 +3,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TSLA–TSLS Profit Tracker</title>
+  <title>TSLA & TSLS Buy/Sell Alert (Finnhub)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f4f4f4;
-      color: #333;
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h2 { font-size: 1.5em; }
+    .price-box, .signal-box {
+      padding: 15px; margin-top: 15px; border-radius: 10px;
+      font-size: 1.2em; font-weight: bold;
     }
-    h2 { margin-top: 0; }
-    .section { margin-bottom: 20px; }
-    input[type="number"] {
-      padding: 8px;
-      width: 100px;
-      margin-right: 10px;
-    }
-    button {
-      padding: 8px 16px;
-      margin-right: 10px;
-      cursor: pointer;
-    }
-    #log {
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 10px;
-      white-space: pre-line;
-    }
+    .price-box { background: #fff; border: 2px solid #ccc; }
+    .buy { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    .sell { background: #d1ecf1; border: 2px solid #0c5460; color: #0c5460; }
+    .wait { background: #fff3cd; border: 2px solid #ffeeba; color: #856404; }
+    .error { background: #f5c6cb; border: 2px solid #721c24; color: #721c24; }
   </style>
 </head>
 <body>
-  <h2>💹 TSLA–TSLS Two-Way Profit Tracker ($USD)</h2>
+  <h2>📈 TSLA & TSLS Buy/Sell Alerts (Live via Finnhub)</h2>
 
-  <div class="section">
-    <label>Price In ($): <input type="number" id="priceIn" step="0.01"></label>
-    <label>Price Out ($): <input type="number" id="priceOut" step="0.01"></label>
-    <label>Qty: <input type="number" id="qty" value="1" step="1"></label><br><br>
-    <button onclick="calculateProfit('TSLA')">Sell TSLA</button>
-    <button onclick="calculateProfit('TSLS')">Sell TSLS</button>
-    <button onclick="resetLog()">🔄 Reset All</button>
-  </div>
+  <div id="tslaPrice" class="price-box">⏳ Loading TSLA price…</div>
+  <div id="tslaSignal" class="signal-box">Checking TSLA...</div>
 
-  <div class="section">
-    <strong>Total Profit ($): </strong><span id="totalProfit">$0.00</span>
-  </div>
-
-  <div id="log" class="section">
-    <strong>Transaction Log:</strong>
-
-  </div>
+  <div id="tslsPrice" class="price-box">⏳ Loading TSLS price…</div>
+  <div id="tslsSignal" class="signal-box">Checking TSLS...</div>
 
   <script>
-    let totalProfit = 0;
+    const apiKey = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";  // Replace with your Finnhub API key
+    const baseUrl = "https://finnhub.io/api/v1/quote?symbol=";
 
-    function calculateProfit(type) {
-      const priceIn = parseFloat(document.getElementById("priceIn").value);
-      const priceOut = parseFloat(document.getElementById("priceOut").value);
-      const qty = parseInt(document.getElementById("qty").value);
+    function fetchData(symbol, priceId, signalId, buy, sell) {
+      fetch(`${baseUrl}${symbol}&token=${apiKey}`)
+        .then(response => response.json())
+        .then(data => {
+          const price = parseFloat(data.c); // current price
+          document.getElementById(priceId).innerHTML = `✅ ${symbol} current price: <strong>$${price.toFixed(2)}</strong>`;
+          evaluate(symbol, price, signalId, buy, sell);
+        })
+        .catch(err => {
+          document.getElementById(priceId).innerHTML = `❌ Error loading ${symbol} price`;
+          document.getElementById(signalId).className = "signal-box error";
+          document.getElementById(signalId).innerHTML = `⚠️ Failed to fetch ${symbol} data`;
+        });
+    }
 
-      if (isNaN(priceIn) || isNaN(priceOut) || isNaN(qty)) {
-        alert("Please fill in all fields correctly.");
-        return;
+    function evaluate(symbol, price, signalId, buy, sell) {
+      const box = document.getElementById(signalId);
+      if (price <= buy) {
+        box.className = "signal-box buy";
+        box.innerHTML = `🔴 ${symbol} dropped below $${buy} → <strong>BUY NOW!</strong>`;
+      } else if (price >= sell) {
+        box.className = "signal-box sell";
+        box.innerHTML = `🔵 ${symbol} exceeded $${sell} → <strong>SELL NOW!</strong>`;
+      } else {
+        box.className = "signal-box wait";
+        box.innerHTML = `⏳ ${symbol} is between $${buy+1}–$${sell-1} → <strong>WAIT</strong>`;
       }
-
-      const diff = (priceOut - priceIn) * qty;
-      totalProfit += diff;
-      document.getElementById("totalProfit").textContent = "$" + totalProfit.toFixed(2);
-
-      const log = document.getElementById("log");
-      const msg = `${type} | In: $${priceIn} → Out: $${priceOut} | Qty: ${qty} | P/L: $${diff.toFixed(2)}`;
-      log.textContent += msg + "\n";
     }
 
-    function resetLog() {
-      totalProfit = 0;
-      document.getElementById("totalProfit").textContent = "$0.00";
-      document.getElementById("log").textContent = "Transaction Log:\n";
-    }
+    fetchData("TSLA", "tslaPrice", "tslaSignal", 310, 330);
+    fetchData("TSLS", "tslsPrice", "tslsSignal", 7, 9.5);
   </script>
 </body>
 </html>
