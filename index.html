@@ -1,24 +1,32 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>แจ้งเตือนหุ้นตามเวลานิวยอร์ก</title>
+  <title>แจ้งเตือนหุ้น TSLA / TSLS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      font-family: 'Tahoma', sans-serif;
-      background: linear-gradient(to bottom right, #0f2027, #203a43, #2c5364);
+      font-family: Tahoma, sans-serif;
+      background: #0d1b2a;
       color: #e0e0e0;
       padding: 20px;
     }
     h1 {
+      color: #00ffff;
       text-align: center;
-      color: #00ffcc;
-      font-size: 1.8em;
       margin-bottom: 20px;
       text-shadow: 0 0 5px #00ffff;
     }
+    .status-box {
+      text-align: center;
+      font-size: 1.2em;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .open { background: #004d40; color: #00ffcc; }
+    .closed { background: #550000; color: #ff9999; }
+
     .box {
       padding: 15px;
       margin-top: 15px;
@@ -42,7 +50,8 @@
 </head>
 <body>
   <h1>📈 ระบบแจ้งเตือนหุ้น TSLA และ TSLS (ตามเวลานิวยอร์ก)</h1>
-  <div id="marketStatus" class="box status">⏳ ตรวจสอบสถานะตลาด...</div>
+  <div id="marketStatus" class="status-box">⏳ ตรวจสอบสถานะตลาด...</div>
+
   <div class="graph-line"></div>
 
   <div id="tslaBox" class="box">
@@ -67,25 +76,26 @@
 
     function isMarketOpenNY() {
       const now = new Date();
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      const nyOffset = -4; // EDT = UTC-4
-      const nyDate = new Date(utc + 3600000 * nyOffset);
+      const options = { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false };
+      const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(now);
+      let hour = 0, minute = 0, day = "";
+      parts.forEach(p => {
+        if (p.type === 'hour') hour = parseInt(p.value);
+        if (p.type === 'minute') minute = parseInt(p.value);
+        if (p.type === 'weekday') day = p.value;
+      });
 
-      const day = nyDate.getUTCDay();
-      const hours = nyDate.getUTCHours();
-      const minutes = nyDate.getUTCMinutes();
+      const totalMins = hour * 60 + minute;
+      const openMins = 9 * 60 + 30;
+      const closeMins = 16 * 60;
 
-      const timeValue = hours * 60 + minutes;
-      const openValue = 13 * 60 + 30; // 09:30 EDT
-      const closeValue = 20 * 60;     // 16:00 EDT
-
-      const statusBox = document.getElementById("marketStatus");
-      if (day === 0 || day === 6 || timeValue < openValue || timeValue > closeValue) {
-        statusBox.innerHTML = "❌ ตลาดปิดทำการ (เวลานิวยอร์ก)";
-        statusBox.style.backgroundColor = "#550000";
+      const marketStatus = document.getElementById("marketStatus");
+      if (["Sat", "Sun"].includes(day) || totalMins < openMins || totalMins > closeMins) {
+        marketStatus.className = "status-box closed";
+        marketStatus.innerHTML = "❌ ตลาดปิดทำการ (ตามเวลานิวยอร์ก)";
       } else {
-        statusBox.innerHTML = "✅ ตลาดเปิดทำการ (เวลานิวยอร์ก)";
-        statusBox.style.backgroundColor = "#004d40";
+        marketStatus.className = "status-box open";
+        marketStatus.innerHTML = "✅ ตลาดเปิดทำการ (ตามเวลานิวยอร์ก)";
       }
     }
 
