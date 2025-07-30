@@ -3,7 +3,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>📊 แจ้งเตือนซื้อขายหุ้น TSLA & TSLS (ธีมกราฟหุ้น)</title>
+  <title>แจ้งเตือนหุ้นตามเวลานิวยอร์ก</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
@@ -41,37 +41,52 @@
   </style>
 </head>
 <body>
-  <h1>📈 ระบบแจ้งเตือนซื้อ–ขายหุ้น TSLA และ TSLS</h1>
+  <h1>📈 ระบบแจ้งเตือนหุ้น TSLA และ TSLS (ตามเวลานิวยอร์ก)</h1>
   <div id="marketStatus" class="box status">⏳ ตรวจสอบสถานะตลาด...</div>
   <div class="graph-line"></div>
+
   <div id="tslaBox" class="box">
     <h2>📌 TSLA</h2>
     <div id="tslaPrice" class="price">⏳ กำลังโหลดราคา...</div>
     <div id="tslaSignal"></div>
     <div id="tslaBudget"></div>
   </div>
+
   <div class="graph-line"></div>
+
   <div id="tslsBox" class="box">
     <h2>📌 TSLS</h2>
     <div id="tslsPrice" class="price">⏳ กำลังโหลดราคา...</div>
     <div id="tslsSignal"></div>
     <div id="tslsBudget"></div>
   </div>
+
   <script>
     const apiKey = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
     const baseUrl = "https://finnhub.io/api/v1/quote?symbol=";
-    const now = new Date();
-    const utcHour = now.getUTCHours();
-    const utcDay = now.getUTCDay();
-    const thHour = (utcHour + 7) % 24;
-    const marketStatusBox = document.getElementById("marketStatus");
 
-    if (utcDay === 0 || utcDay === 6 || thHour < 21 && thHour >= 4) {
-      marketStatusBox.innerHTML = "❌ ตลาดปิดทำการ (เวลาประเทศไทย: " + thHour + ":00)";
-      marketStatusBox.style.backgroundColor = "#550000";
-    } else {
-      marketStatusBox.innerHTML = "✅ ตลาดเปิดทำการ (เวลาประเทศไทย: " + thHour + ":00)";
-      marketStatusBox.style.backgroundColor = "#004d40";
+    function isMarketOpenNY() {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      const nyOffset = -4; // EDT = UTC-4
+      const nyDate = new Date(utc + 3600000 * nyOffset);
+
+      const day = nyDate.getUTCDay();
+      const hours = nyDate.getUTCHours();
+      const minutes = nyDate.getUTCMinutes();
+
+      const timeValue = hours * 60 + minutes;
+      const openValue = 13 * 60 + 30; // 09:30 EDT
+      const closeValue = 20 * 60;     // 16:00 EDT
+
+      const statusBox = document.getElementById("marketStatus");
+      if (day === 0 || day === 6 || timeValue < openValue || timeValue > closeValue) {
+        statusBox.innerHTML = "❌ ตลาดปิดทำการ (เวลานิวยอร์ก)";
+        statusBox.style.backgroundColor = "#550000";
+      } else {
+        statusBox.innerHTML = "✅ ตลาดเปิดทำการ (เวลานิวยอร์ก)";
+        statusBox.style.backgroundColor = "#004d40";
+      }
     }
 
     function fetchData(symbol, priceId, signalId, budgetId, buy, sell, gainPerUnit) {
@@ -80,19 +95,21 @@
         .then(data => {
           const price = parseFloat(data.c);
           document.getElementById(priceId).innerHTML = `💵 ราคาปัจจุบัน: <strong>$${price.toFixed(2)}</strong>`;
+
           let signal = "";
           if (price <= buy) {
-            signal = `🔴 ${symbol} ต่ำกว่า ${buy} → <strong>ควรซื้อทันที!</strong>`;
+            signal = `🔴 ${symbol} ต่ำกว่า $${buy} → <strong>ควรซื้อทันที!</strong>`;
             document.getElementById(signalId).className = "buy";
             alert(`📢 แจ้งเตือน: ${symbol} ถึงจุดซื้อแล้ว!`);
           } else if (price >= sell) {
-            signal = `🔵 ${symbol} สูงกว่า ${sell} → <strong>ควรขายทันที!</strong>`;
+            signal = `🔵 ${symbol} สูงกว่า $${sell} → <strong>ควรขายทันที!</strong>`;
             document.getElementById(signalId).className = "sell";
             alert(`📢 แจ้งเตือน: ${symbol} ถึงจุดขายแล้ว!`);
           } else {
-            signal = `⏳ ${symbol} อยู่ระหว่าง ${buy} – ${sell} → <strong>รอจังหวะ</strong>`;
+            signal = `⏳ ${symbol} อยู่ระหว่าง $${buy} – $${sell} → <strong>รอจังหวะ</strong>`;
             document.getElementById(signalId).className = "wait";
           }
+
           const units = Math.ceil(5 / gainPerUnit);
           const requiredBudget = (price * units).toFixed(2);
           document.getElementById(signalId).innerHTML = signal;
@@ -103,6 +120,7 @@
         });
     }
 
+    isMarketOpenNY();
     fetchData("TSLA", "tslaPrice", "tslaSignal", "tslaBudget", 310, 330, 20);
     fetchData("TSLS", "tslsPrice", "tslsSignal", "tslsBudget", 7.00, 9.50, 2.5);
   </script>
