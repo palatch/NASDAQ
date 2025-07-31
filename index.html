@@ -3,135 +3,161 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>แจ้งเตือนหุ้น TSLA/TSLS + บันทึกกำไร</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบเทรด TSLA/TSLS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Tahoma, sans-serif; background: #0d1b2a; color: #e0e0e0; padding: 20px; }
-    h1 { color: #00ffff; text-align: center; text-shadow: 0 0 5px #00ffff; }
-    .status-box, .graph-line, .box, table { margin: 15px auto; width: 100%; max-width: 700px; }
-    .status-box { text-align: center; padding: 10px; border-radius: 8px; }
-    .open { background: #004d40; color: #00ffcc; }
-    .closed { background: #550000; color: #ff9999; }
-    .graph-line { height: 1px; background: linear-gradient(to right, #00ffcc, transparent); }
-    .box { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid #555; }
-    .buy { background: rgba(255,0,0,0.2); color: #ff6666; }
-    .sell { background: rgba(0,255,255,0.2); color: #00e6e6; }
-    .wait { background: rgba(255,255,0,0.2); color: #ffcc00; }
-    table { border-collapse: collapse; color: #fff; margin-top: 20px; }
-    th, td { border: 1px solid #666; padding: 8px; text-align: center; }
-    th { background-color: #1a2b3c; }
-    button { padding: 5px 10px; margin: 5px; font-weight: bold; }
-    .action { margin-top: 10px; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: #f4f7fa;
+    }
+    .container {
+      max-width: 480px;
+      margin: auto;
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.08);
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 1rem;
+    }
+    .result, .alert {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .result { background: #e6f7ff; }
+    .alert { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    table {
+      width: 100%;
+      margin-top: 15px;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 5px;
+      font-size: 0.8rem;
+      text-align: center;
+    }
+    th {
+      background: #f0f0f0;
+    }
   </style>
 </head>
 <body>
-<h1>📈 แจ้งเตือนหุ้น TSLA และ TSLS + บันทึกการซื้อขาย (Local)</h1>
-<div id="marketStatus" class="status-box">⏳ ตรวจสอบสถานะตลาด...</div>
+  <div class="container">
+    <h2>ระบบเทรด TSLA / TSLS</h2>
 
-<div class="box" id="tslaBox">
-  <h2>📌 TSLA</h2>
-  <div id="tslaPrice">ราคารอโหลด...</div>
-  <div id="tslaSignal"></div>
-  <div id="tslaBudget"></div>
-  <div class="action">
-    <input type="number" id="tslaQty" placeholder="จำนวนหน่วย TSLA">
-    <button onclick="logTrade('TSLA')">บันทึกการซื้อขาย TSLA</button>
+    <label for="symbol">เลือกหุ้น:</label>
+    <select id="symbol">
+      <option value="TSLA">TSLA</option>
+      <option value="TSLS">TSLS</option>
+    </select>
+
+    <label for="amount">เลือกจำนวนทุนลงทุน (USD):</label>
+    <select id="amount">
+      <option value="50">50</option>
+      <option value="100">100</option>
+      <option value="500">500</option>
+    </select>
+
+    <div id="live-price">ราคาปัจจุบัน: กำลังโหลด...</div>
+
+    <button onclick="calculate()">คำนวณจำนวนหุ้น</button>
+
+    <div id="output" class="result" style="display:none;"></div>
+    <div id="alert" class="alert" style="display:none;"></div>
+
+    <h3>ประวัติการซื้อขาย</h3>
+    <table id="history">
+      <thead>
+        <tr><th>วันที่</th><th>หุ้น</th><th>ทุน</th><th>ราคา</th><th>จำนวนหุ้น</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
-</div>
 
-<div class="box" id="tslsBox">
-  <h2>📌 TSLS</h2>
-  <div id="tslsPrice">ราคารอโหลด...</div>
-  <div id="tslsSignal"></div>
-  <div id="tslsBudget"></div>
-  <div class="action">
-    <input type="number" id="tslsQty" placeholder="จำนวนหน่วย TSLS">
-    <button onclick="logTrade('TSLS')">บันทึกการซื้อขาย TSLS</button>
-  </div>
-</div>
+  <script>
+    const apiKey = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
+    let currentPrice = 0;
 
-<div class="graph-line"></div>
-<div class="box">
-  <h2>📋 บันทึกการซื้อขาย</h2>
-  <table id="tradeLog">
-    <thead>
-      <tr>
-        <th>วันเวลา</th><th>หุ้น</th><th>ราคา</th><th>จำนวน</th><th>รวม</th><th>ค่าธรรมเนียม</th><th>รวมสุทธิ</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<script>
-const apiKey = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
-const baseUrl = "https://finnhub.io/api/v1/quote?symbol=";
-const feeRate = 0.003; // สมมุติค่าธรรมเนียม 0.3%
-
-function isMarketOpenNY() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false
-  }).formatToParts(now);
-  let hour = 0, minute = 0, day = "";
-  parts.forEach(p => {
-    if (p.type === 'hour') hour = parseInt(p.value);
-    if (p.type === 'minute') minute = parseInt(p.value);
-    if (p.type === 'weekday') day = p.value;
-  });
-  const totalMins = hour * 60 + minute;
-  const open = 570, close = 960;
-  const box = document.getElementById("marketStatus");
-  if (["Sat", "Sun"].includes(day) || totalMins < open || totalMins > close) {
-    box.className = "status-box closed";
-    box.innerHTML = "❌ ตลาดปิดทำการ (เวลานิวยอร์ก)";
-  } else {
-    box.className = "status-box open";
-    box.innerHTML = "✅ ตลาดเปิดทำการ (เวลานิวยอร์ก)";
-  }
-}
-
-function fetchData(symbol, boxId, priceId, signalId, budgetId, buy, sell, profit) {
-  fetch(`${baseUrl}${symbol}&token=${apiKey}`)
-    .then(r => r.json())
-    .then(d => {
-      const p = parseFloat(d.c);
-      document.getElementById(priceId).innerHTML = `💵 ราคาปัจจุบัน: <b>$${p.toFixed(2)}</b>`;
-      const signalBox = document.getElementById(signalId);
-      if (p <= buy) {
-        signalBox.innerHTML = `🔴 ต่ำกว่า $${buy} → ควรซื้อทันที`;
-        signalBox.className = "buy";
-        alert(`📢 แจ้งเตือน: ${symbol} ถึงจุดซื้อแล้ว!`);
-      } else if (p >= sell) {
-        signalBox.innerHTML = `🔵 สูงกว่า $${sell} → ควรขายทันที`;
-        signalBox.className = "sell";
-        alert(`📢 แจ้งเตือน: ${symbol} ถึงจุดขายแล้ว!`);
-      } else {
-        signalBox.innerHTML = `⏳ อยู่ระหว่าง $${buy} – $${sell} → รอจังหวะ`;
-        signalBox.className = "wait";
+    async function fetchPrice(symbol) {
+      try {
+        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${apiKey}`);
+        const data = await res.json();
+        if (data.price) {
+          currentPrice = parseFloat(data.price);
+          document.getElementById("live-price").innerHTML = `ราคาปัจจุบัน: $${currentPrice.toFixed(2)}`;
+        } else {
+          document.getElementById("live-price").innerHTML = "ดึงราคาไม่สำเร็จ";
+        }
+      } catch (err) {
+        document.getElementById("live-price").innerHTML = "เกิดข้อผิดพลาดในการโหลดราคา";
       }
-      const units = Math.ceil(5 / profit);
-      const total = (units * p).toFixed(2);
-      document.getElementById(budgetId).innerHTML = `💰 ใช้เงินขั้นต่ำ ≈ $${total} (${units} หน่วย กำไร ≥ $5)`;
-      localStorage.setItem(symbol + "_price", p);
+    }
+
+    function calculate() {
+      const investment = parseFloat(document.getElementById("amount").value);
+      const symbol = document.getElementById("symbol").value;
+      if (!investment || !currentPrice) {
+        alert("กรุณารอโหลดราคาหรือกรอกจำนวนเงินให้ครบ");
+        return;
+      }
+
+      const shares = (investment / currentPrice).toFixed(4);
+      const sellPriceTarget = ((investment + 5) / shares).toFixed(2);
+
+      document.getElementById("output").style.display = "block";
+      document.getElementById("output").innerHTML = `คุณจะได้หุ้น <b>${shares}</b> หน่วย ของ <b>${symbol}</b><br>ราคาซื้อ: $${currentPrice.toFixed(2)}<br>เพื่อกำไร 5 USD ควรขายเมื่อราคาขึ้นถึง: <b>$${sellPriceTarget}</b>`;
+
+      if (currentPrice >= sellPriceTarget) {
+        document.getElementById("alert").style.display = "block";
+        document.getElementById("alert").innerHTML = `📢 ถึงเวลาขาย ${symbol} แล้ว! ราคาปัจจุบัน $${currentPrice.toFixed(2)} เกินเป้ากำไรที่ตั้งไว้แล้ว`;
+      } else {
+        document.getElementById("alert").style.display = "none";
+      }
+
+      const now = new Date();
+      const log = {
+        date: now.toLocaleDateString(),
+        symbol,
+        investment,
+        price: currentPrice.toFixed(2),
+        shares
+      };
+
+      saveTrade(log);
+      renderHistory();
+    }
+
+    function saveTrade(data) {
+      let trades = JSON.parse(localStorage.getItem("trades") || "[]");
+      trades.push(data);
+      localStorage.setItem("trades", JSON.stringify(trades));
+    }
+
+    function renderHistory() {
+      let trades = JSON.parse(localStorage.getItem("trades") || "[]");
+      const tbody = document.querySelector("#history tbody");
+      tbody.innerHTML = "";
+      trades.forEach(t => {
+        const row = `<tr><td>${t.date}</td><td>${t.symbol}</td><td>$${t.investment}</td><td>$${t.price}</td><td>${t.shares}</td></tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    document.getElementById("symbol").addEventListener("change", () => {
+      fetchPrice(document.getElementById("symbol").value);
+      document.getElementById("output").style.display = "none";
+      document.getElementById("alert").style.display = "none";
     });
-}
 
-function logTrade(symbol) {
-  const qty = parseInt(document.getElementById(symbol.toLowerCase() + "Qty").value);
-  if (!qty || qty <= 0) return alert("กรุณาใส่จำนวนหน่วยให้ถูกต้อง");
-  const p = parseFloat(localStorage.getItem(symbol + "_price"));
-  const now = new Date().toLocaleString("th-TH");
-  const total = (p * qty).toFixed(2);
-  const fee = (p * qty * feeRate).toFixed(2);
-  const net = (p * qty * (1 + feeRate)).toFixed(2);
-  const row = `<tr><td>${now}</td><td>${symbol}</td><td>$${p.toFixed(2)}</td><td>${qty}</td><td>$${total}</td><td>$${fee}</td><td>$${net}</td></tr>`;
-  document.querySelector("#tradeLog tbody").innerHTML += row;
-}
-
-isMarketOpenNY();
-fetchData("TSLA", "tslaBox", "tslaPrice", "tslaSignal", "tslaBudget", 310, 330, 20);
-fetchData("TSLS", "tslsBox", "tslsPrice", "tslsSignal", "tslsBudget", 7.00, 9.50, 2.5);
-</script>
+    fetchPrice("TSLA");
+    renderHistory();
+  </script>
 </body>
 </html>
