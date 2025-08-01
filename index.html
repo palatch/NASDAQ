@@ -2,162 +2,91 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <title>ระบบเทรด TSLA/TSLS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>เทรด TSLA / TSLS</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      padding: 20px;
-      background: #f4f7fa;
-    }
-    .container {
-      max-width: 480px;
-      margin: auto;
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.08);
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      font-size: 1rem;
-    }
-    .result, .alert {
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 8px;
-    }
-    .result { background: #e6f7ff; }
-    .alert { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-    table {
-      width: 100%;
-      margin-top: 15px;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 5px;
-      font-size: 0.8rem;
-      text-align: center;
-    }
-    th {
-      background: #f0f0f0;
-    }
+    body{margin:0;font-family:sans-serif;background:#0d1117;color:#c9d1d9;padding:10px}
+    .box{border:2px solid #00ff99;border-radius:12px;padding:15px;margin-bottom:15px;background:#161b22}
+    .header{font-size:1.3em;color:#39ff14;margin-bottom:10px}
+    button{background:#00ff99;color:#000;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;margin:5px 0}
+    table{width:100%;border-collapse:collapse;margin-top:20px;font-size:0.9em}
+    th,td{border:1px solid #333;padding:6px;text-align:center}
+    th{background:#1e1e1e;color:#00ff99}
+    #popup{position:fixed;top:30%;left:50%;transform:translate(-50%,-50%);background:#1f6feb;color:#fff;padding:20px;border-radius:8px;display:none;z-index:10}
+    @media(max-width:480px){.box{margin:5px;padding:10px}}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>ระบบเทรด TSLA / TSLS</h2>
-
-    <label for="symbol">เลือกหุ้น:</label>
-    <select id="symbol">
-      <option value="TSLA">TSLA</option>
-      <option value="TSLS">TSLS</option>
-    </select>
-
-    <label for="amount">เลือกจำนวนทุนลงทุน (USD):</label>
-    <select id="amount">
-      <option value="50">50</option>
-      <option value="100">100</option>
-      <option value="500">500</option>
-    </select>
-
-    <div id="live-price">ราคาปัจจุบัน: กำลังโหลด...</div>
-
-    <button onclick="calculate()">คำนวณจำนวนหุ้น</button>
-
-    <div id="output" class="result" style="display:none;"></div>
-    <div id="alert" class="alert" style="display:none;"></div>
-
-    <h3>ประวัติการซื้อขาย</h3>
-    <table id="history">
-      <thead>
-        <tr><th>วันที่</th><th>หุ้น</th><th>ทุน</th><th>ราคา</th><th>จำนวนหุ้น</th></tr>
-      </thead>
-      <tbody></tbody>
+  <div id="popup"></div>
+  <div class="box" id="box-TSLA">
+    <div class="header">TSLA / USD</div>
+    <div>📈 ราคาปัจจุบัน: <span id="price-TSLA">กำลังโหลด...</span></div>
+    <div>ทุน:
+      <select id="inv-TSLA"><option>50</option><option>100</option><option>500</option></select> USD
+    </div>
+    <div><button onclick="buy('TSLA')">ซื้อ</button><button onclick="sell('TSLA')">ขาย</button></div>
+  </div>
+  <div class="box" id="box-TSLS">
+    <div class="header">TSLS / USD</div>
+    <div>📈 ราคาปัจจุบัน: <span id="price-TSLS">กำลังโหลด...</span></div>
+    <div>ทุน:
+      <select id="inv-TSLS"><option>50</option><option>100</option><option>500</option></select> USD
+    </div>
+    <div><button onclick="buy('TSLS')">ซื้อ</button><button onclick="sell('TSLS')">ขาย</button></div>
+  </div>
+  <div>
+    <h3>📋 ประวัติซื้อ–ขาย</h3>
+    <table>
+      <thead><tr><th>วันที่</th><th>หุ้น</th><th>ทุน</th><th>ราคา</th><th>หุ้น</th><th>กำไร</th></tr></thead>
+      <tbody id="history"></tbody>
     </table>
   </div>
+  <div id="chartContainer" style="height:300px;margin-top:20px;"></div>
 
-  <script>
-    const apiKey = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
-    let currentPrice = 0;
-
-    async function fetchPrice(symbol) {
-      try {
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${apiKey}`);
-        const data = await res.json();
-        if (data.price) {
-          currentPrice = parseFloat(data.price);
-          document.getElementById("live-price").innerHTML = `ราคาปัจจุบัน: $${currentPrice.toFixed(2)}`;
-        } else {
-          document.getElementById("live-price").innerHTML = "ดึงราคาไม่สำเร็จ";
-        }
-      } catch (err) {
-        document.getElementById("live-price").innerHTML = "เกิดข้อผิดพลาดในการโหลดราคา";
-      }
-    }
-
-    function calculate() {
-      const investment = parseFloat(document.getElementById("amount").value);
-      const symbol = document.getElementById("symbol").value;
-      if (!investment || !currentPrice) {
-        alert("กรุณารอโหลดราคาหรือกรอกจำนวนเงินให้ครบ");
-        return;
-      }
-
-      const shares = (investment / currentPrice).toFixed(4);
-      const sellPriceTarget = ((investment + 5) / shares).toFixed(2);
-
-      document.getElementById("output").style.display = "block";
-      document.getElementById("output").innerHTML = `คุณจะได้หุ้น <b>${shares}</b> หน่วย ของ <b>${symbol}</b><br>ราคาซื้อ: $${currentPrice.toFixed(2)}<br>เพื่อกำไร 5 USD ควรขายเมื่อราคาขึ้นถึง: <b>$${sellPriceTarget}</b>`;
-
-      if (currentPrice >= sellPriceTarget) {
-        document.getElementById("alert").style.display = "block";
-        document.getElementById("alert").innerHTML = `📢 ถึงเวลาขาย ${symbol} แล้ว! ราคาปัจจุบัน $${currentPrice.toFixed(2)} เกินเป้ากำไรที่ตั้งไว้แล้ว`;
-      } else {
-        document.getElementById("alert").style.display = "none";
-      }
-
-      const now = new Date();
-      const log = {
-        date: now.toLocaleDateString(),
-        symbol,
-        investment,
-        price: currentPrice.toFixed(2),
-        shares
-      };
-
-      saveTrade(log);
-      renderHistory();
-    }
-
-    function saveTrade(data) {
-      let trades = JSON.parse(localStorage.getItem("trades") || "[]");
-      trades.push(data);
-      localStorage.setItem("trades", JSON.stringify(trades));
-    }
-
-    function renderHistory() {
-      let trades = JSON.parse(localStorage.getItem("trades") || "[]");
-      const tbody = document.querySelector("#history tbody");
-      tbody.innerHTML = "";
-      trades.forEach(t => {
-        const row = `<tr><td>${t.date}</td><td>${t.symbol}</td><td>$${t.investment}</td><td>$${t.price}</td><td>${t.shares}</td></tr>`;
-        tbody.innerHTML += row;
-      });
-    }
-
-    document.getElementById("symbol").addEventListener("change", () => {
-      fetchPrice(document.getElementById("symbol").value);
-      document.getElementById("output").style.display = "none";
-      document.getElementById("alert").style.display = "none";
-    });
-
-    fetchPrice("TSLA");
-    renderHistory();
-  </script>
+<script src="https://unpkg.com/lightweight-charts@3.5.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+const key="d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
+const symbols=["TSLA","TSLS"];
+const data={};
+async function fetchAll(){
+  for(let s of symbols){
+    const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${key}`);
+    const j=await r.json();
+    data[s]=j.c;
+    document.getElementById("price-"+s).textContent="$"+j.c.toFixed(2);
+  }
+}
+function saveLog(e){
+  const arr=JSON.parse(localStorage.getItem("log")||"[]");
+  arr.push(e);
+  localStorage.setItem("log",JSON.stringify(arr));
+  renderHistory();
+}
+function buy(s){
+  const inv=+document.getElementById("inv-"+s).value;
+  const p=data[s];
+  const qty=inv/p;
+  saveLog({time:new Date().toLocaleString(),s,inv,p,qty:qty.toFixed(4),type:"BUY"});
+}
+function sell(s){
+  const inv=+document.getElementById("inv-"+s).value;
+  const p=data[s];
+  const qty=inv/p;
+  const profit=(qty*(p - (inv/qty))).toFixed(2);
+  saveLog({time:new Date().toLocaleString(),s,inv,p,qty:qty.toFixed(4),type:"SELL",profit});
+  if(profit>=5)popup(s+" ถึงจุดขายแล้ว 🎯");
+}
+function renderHistory(){
+  const arr=JSON.parse(localStorage.getItem("log")||"[]");
+  const tb=document.getElementById("history");
+  tb.innerHTML="";
+  for(let e of arr.reverse()){
+    tb.innerHTML+=`<tr><td>${e.time}</td><td>${e.s}</td><td>$${e.inv}</td><td>$${e.p.toFixed(2)}</td><td>${e.qty}</td><td>${e.profit||""}</td></tr>`;
+  }
+}
+function popup(txt){const p=document.getElementById("popup");p.textContent=txt;p.style.display="block";setTimeout(()=>p.style.display="none",3000);}
+fetchAll();renderHistory();setInterval(fetchAll,60000);
+</script>
 </body>
 </html>
