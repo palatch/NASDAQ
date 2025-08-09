@@ -4,16 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0D1117">
-  <title>Dime Logger – Bitkub Theme (PWA)</title>
+  <title>Dime Logger – Bitkub (OCR First)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <script>
     window.FINNHUB_API_KEY = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
-    window.DEFAULT_SYMBOLS = ["TSLA","AAPL","NVDA","MSFT","GOOGL","TSLS","JEPQ"];
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
@@ -36,24 +34,22 @@
       <div class="font-bold text-lg">Dime Logger — Bitkub</div>
       <div class="text-xs muted" id="lastSync">—</div>
     </div>
-    <div class="text-xs muted mt-1">บันทึกซื้อ–ขาย + ราคาจริง (Mobile PWA)</div>
+    <div class="text-xs muted mt-1">อัปโหลดภาพจาก Dime เพื่อบันทึกซื้อ–ขายอัตโนมัติ</div>
   </header>
 
   <main class="flex-1 p-4 space-y-4">
-    <!-- Watchlist -->
+
+    <!-- OCR FIRST -->
     <section class="card p-4">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="font-semibold">ราคาหุ้น (Realtime)</h2>
-        <div class="flex gap-2">
-          <button id="btnRefresh" class="btn px-3 py-2 bg-[#1f2632] hover:opacity-90">รีเฟรช</button>
-          <button id="btnA2HS" class="btn btn-primary px-3 py-2 hidden">ติดตั้งแอป</button>
-        </div>
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">นำเข้าจากภาพ (OCR)</h2>
+        <span class="text-xs pill">ไทย+อังกฤษ</span>
       </div>
-      <div class="mt-3 flex gap-2">
-        <input id="symbolInput" placeholder="เพิ่มสัญลักษณ์ เช่น TSLA" class="px-3 py-3 flex-1">
-        <button id="btnAddSymbol" class="btn btn-primary px-4">เพิ่ม</button>
+      <div class="mt-3">
+        <label for="ocrFile" class="btn btn-primary px-4 py-3 text-center block">📷 อัปโหลดภาพรายการจาก Dime</label>
+        <input id="ocrFile" type="file" accept="image/*" class="hidden">
+        <div id="ocrStatus" class="text-xs muted mt-2"></div>
       </div>
-      <div id="watchlist" class="mt-3 grid grid-cols-1 gap-2"></div>
     </section>
 
     <!-- Quick add trade -->
@@ -83,25 +79,20 @@
         <button id="btnExportCsv" class="btn px-3 py-2 bg-[#1f2632] hover:opacity-90">Export CSV</button>
         <button id="btnClearAll" class="btn px-3 py-2" style="background:#2a171a; color:#f2b8b8;">ล้างข้อมูลทั้งหมด</button>
       </div>
-      <div class="mt-4">
-        <div class="text-sm font-semibold mb-2">นำเข้าจากภาพ (OCR เบต้า)</div>
-        <input id="ocrFile" type="file" accept="image/*" class="block text-sm">
-        <div id="ocrStatus" class="text-xs muted mt-1"></div>
-      </div>
     </section>
 
     <!-- Portfolio summary + sorting -->
     <section class="card p-4">
       <div class="flex items-center justify-between">
         <h2 class="font-semibold">สรุปพอร์ต & P/L</h2>
-        <div class="text-xs muted">คำนวณจากราคาปัจจุบัน · เรียง: ตำแหน่งคงเหลือมากสุด → น้อย</div>
+        <div class="text-xs muted">คำนวณจากราคาปัจจุบัน · แสดงเฉพาะหุ้นที่มีในรายการ · เรียงตามมูลค่าถือครอง</div>
       </div>
       <div id="portfolio" class="mt-3 grid grid-cols-1 gap-3"></div>
     </section>
   </main>
 
   <footer class="p-4 text-center text-xs muted">
-    PWA – ทำงานออฟไลน์บางส่วน · เก็บข้อมูลในเครื่อง · ปลอดภัยไม่ส่งข้อมูลออก
+    PWA – ทำงานออฟไลน์บางส่วน · เก็บข้อมูลในเครื่อง · ไม่ส่งข้อมูลออก
   </footer>
 
   <script src="app.js"></script>
