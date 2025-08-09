@@ -1,4 +1,4 @@
-// Bitkub-themed mobile PWA with Finnhub + mini charts (icons in root)
+// Bitkub-themed PWA with: profit display, invested sorting, and OCR import
 const LS_KEYS = { WATCHLIST:'dm_bk_watchlist', TRADES:'dm_bk_trades' };
 const apiKey = window.FINNHUB_API_KEY;
 const defaultSymbols = window.DEFAULT_SYMBOLS || [];
@@ -23,86 +23,9 @@ async function fetchQuote(symbol){
   const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
   const res = await fetch(url); if(!res.ok) throw new Error('quote failed'); return res.json();
 }
-// candles for mini chart (7–10 days)
-async function fetchCandles(symbol){
-  try{
-    const now = Math.floor(Date.now()/1000);
-    const weekAgo = now - 86400*10;
-    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${weekAgo}&to=${now}&token=${apiKey}`;
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('candle failed');
-    const data = await res.json();
-    if(data.s !== 'ok') throw new Error('no candle');
-    return data;
-  } catch(e){ return null; }
-}
+
 const fUSD = (n)=> Number.isFinite(n)? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'-';
-
-async function renderWatchlist(){
-  const box = document.getElementById('watchlist'); box.innerHTML='';
-  const syms = getWatchlist();
-  const parts = await Promise.all(syms.map(async s=>{
-    try{
-      const [q, candles] = await Promise.all([fetchQuote(s), fetchCandles(s)]);
-      const up = (q.d||0) >= 0;
-      const id = 'ch_' + s;
-      const chartHtml = `<canvas id='${id}' height='60'></canvas>`;
-      const html = `<div class='p-3 card'>
-        <div class='flex items-start justify-between gap-2'>
-          <div>
-            <div class='font-semibold text-[15px]'>${s}</div>
-            <div class='text-[11px] muted'>Prev ${q.pc ?? '-'} · O ${q.o ?? '-'} · H ${q.h ?? '-'} · L ${q.l ?? '-'}</div>
-          </div>
-          <div class='text-right'>
-            <div class='text-xl font-extrabold'>${q.c ?? '-'}</div>
-            <div class='text-[12px] ${up?'text-[var(--green)]':'text-[var(--red)]'}'>${q.d ?? 0} (${q.dp ?? 0}%)</div>
-            <div class='flex justify-end mt-2'>
-              <button data-sym='${s}' class='px-2 py-1 bg-[#1f2632] hover:opacity-90 text-xs rounded removeSym'>ลบ</button>
-            </div>
-          </div>
-        </div>
-        <div class='mt-2'>${chartHtml}</div>
-      </div>`;
-      return { html, s, id, candles };
-    }catch(e){
-      return { html: `<div class='p-3 card flex items-center justify-between'>
-        <div class='font-semibold'>${s}</div>
-        <div class='text-[var(--red)] text-sm'>ดึงราคาไม่ได้</div>
-        <button data-sym='${s}' class='px-2 py-1 bg-[#1f2632] hover:opacity-90 text-xs rounded removeSym'>ลบ</button>
-      </div>` };
-    }
-  }));
-  box.innerHTML = parts.map(p=>p.html).join('');
-
-  // remove buttons
-  box.querySelectorAll('.removeSym').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const s = btn.getAttribute('data-sym');
-      const list = getWatchlist().filter(x=>x!==s);
-      setWatchlist(list); renderWatchlist(); renderPortfolio();
-    });
-  });
-
-  // draw charts
-  parts.forEach(p=>{
-    if(!p || !p.candles || !p.id) return;
-    const ctx = document.getElementById(p.id);
-    if(!ctx) return;
-    const ds = p.candles.c || [];
-    const labels = (p.candles.t || []).map(ts=> new Date(ts*1000).toLocaleDateString());
-    new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets: [{ data: ds, tension: .35 }] },
-      options: {
-        plugins: { legend: { display:false } },
-        scales: { x: { display:false }, y: { display:false } },
-        elements: { point: { radius:0 } }
-      }
-    });
-  });
-
-  document.getElementById('lastSync').textContent = 'อัปเดต: ' + new Date().toLocaleTimeString();
-}
+const pct = (a,b)=> (b!==0? ((a-b)/b*100):0);
 
 function addSymbol(){
   const input = document.getElementById('symbolInput');
@@ -115,8 +38,8 @@ function addTrade(){
   const d = document.getElementById('tradeDate').value || new Date().toISOString().slice(0,10);
   const sym = (document.getElementById('tradeSymbol').value||'').trim().toUpperCase();
   const side = document.getElementById('tradeSide').value;
-  const qty = parseFloat(document.getElementById('tradeQty').value);
-  const price = parseFloat(document.getElementById('tradePrice').value);
+  const qty = parseFloat(document.getElementById('tradeQty').value||'0');
+  const price = parseFloat(document.getElementById('tradePrice').value||'0');
   const fee = parseFloat(document.getElementById('tradeFee').value||'0');
   const fx = parseFloat(document.getElementById('tradeFx').value||'0');
   const note = document.getElementById('tradeNote').value||'';
@@ -134,48 +57,211 @@ function exportCsv(){
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='trades.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
-function clearAll(){
-  if(!confirm('ล้างข้อมูลทั้งหมดในเครื่องนี้?')) return;
-  localStorage.removeItem(LS_KEYS.TRADES); renderPortfolio();
+function clearAll(){ if(!confirm('ล้างข้อมูลทั้งหมดในเครื่องนี้?')) return; localStorage.removeItem(LS_KEYS.TRADES); renderPortfolio(); }
+
+async function renderWatchlist(){
+  const box = document.getElementById('watchlist'); box.innerHTML='';
+  const syms = getWatchlist();
+  const parts = await Promise.all(syms.map(async s=>{
+    try{
+      const q = await fetchQuote(s); const up = (q.d||0)>=0;
+      return `<div class='p-3 card flex items-center justify-between'>
+        <div>
+          <div class='font-semibold text-[15px]'>${s}</div>
+          <div class='text-[11px] muted'>Prev ${q.pc ?? '-'} · O ${q.o ?? '-'} · H ${q.h ?? '-'} · L ${q.l ?? '-'}</div>
+        </div>
+        <div class='text-right'>
+          <div class='text-xl font-extrabold'>${q.c ?? '-'}</div>
+          <div class='text-[12px] ${up?'text-[var(--green)]':'text-[var(--red)]'}'>${q.d ?? 0} (${q.dp ?? 0}%)</div>
+          <button data-sym='${s}' class='mt-2 px-2 py-1 bg-[#1f2632] hover:opacity-90 text-xs rounded removeSym'>ลบ</button>
+        </div>
+      </div>`;
+    }catch(e){
+      return `<div class='p-3 card flex items-center justify-between'>
+        <div class='font-semibold'>${s}</div>
+        <div class='text-[var(--red)] text-sm'>ดึงราคาไม่ได้</div>
+        <button data-sym='${s}' class='px-2 py-1 bg-[#1f2632] hover:opacity-90 text-xs rounded removeSym'>ลบ</button>
+      </div>`;
+    }
+  }));
+  box.innerHTML = parts.join('');
+  box.querySelectorAll('.removeSym').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const s = btn.dataset.sym; const list = getWatchlist().filter(x=>x!==s); setWatchlist(list); renderWatchlist(); renderPortfolio();
+    });
+  });
+  document.getElementById('lastSync').textContent = 'อัปเดต: ' + new Date().toLocaleTimeString();
 }
 
 async function renderPortfolio(){
   const box = document.getElementById('portfolio'); const rows = getTrades();
   const by = {}; rows.forEach(r=>{ (by[r.sym]=by[r.sym]||[]).push(r); });
-  const syms = Object.keys(by); const quotes = {};
-  await Promise.all(syms.map(async s=>{ try{ quotes[s]=await fetchQuote(s); } catch{ quotes[s]=null; } }));
+  const syms = Object.keys(by);
+  const quotes = {}; await Promise.all(syms.map(async s=>{ try{ quotes[s]=await fetchQuote(s); } catch{ quotes[s]=null; } }));
 
-  const cards = syms.map(s=>{
+  // Compute per symbol
+  let items = syms.map(s=>{
     const q = quotes[s]; const arr = by[s];
-    let qty=0, cost=0, fees=0;
+    let qty=0, cost=0, fees=0, buys=0;
     arr.forEach(r=>{
-      if(r.side==='BUY'){ qty+=r.qty; cost+=r.qty*r.price; fees+=r.fee||0; }
+      if(r.side==='BUY'){ qty+=r.qty; cost+=r.qty*r.price; fees+=r.fee||0; buys+=r.qty*r.price; }
       else if(r.side==='SELL'){ qty-=r.qty; cost-=r.qty*(cost/Math.max(qty+r.qty,1)); fees+=r.fee||0; }
+      else if(r.side==='FEE'){ fees+=r.fee || r.price || 0; }
     });
     const avg = qty!==0? cost/qty : 0;
     const cur = q && q.c? q.c : 0;
     const mkt = qty*cur;
     const pnl = qty*(cur-avg)-fees;
-    const pnlClass = pnl>=0 ? 'text-[var(--green)]' : 'text-[var(--red)]';
+    const pnlPct = avg!==0 ? ((cur-avg)/avg*100) : 0;
+    const investedNow = qty>0 ? qty*avg : 0; // ใช้เพื่อการเรียง
+    return { s, qty, avg, cur, mkt, fees, pnl, pnlPct, investedNow, count: arr.length };
+  });
+
+  // Sort: positions with qty>0 first by investedNow desc, then others by symbol
+  items.sort((a,b)=> (b.investedNow>0)-(a.investedNow>0) || b.investedNow - a.investedNow || a.s.localeCompare(b.s));
+
+  const cards = items.map(x=>{
+    const cls = x.pnl>=0 ? 'text-[var(--green)]' : 'text-[var(--red)]';
+    const info = `ราคาเฉลี่ยซื้อ: <b>${fUSD(x.avg)}</b> · ปัจจุบัน: <b>${fUSD(x.cur)}</b>`;
+    const prof = `กำไร: <b>${fUSD(x.pnl)}</b> (${x.pnlPct.toFixed(2)}%)`;
     return `<div class='p-4 card'>
       <div class='flex items-center justify-between'>
-        <div class='font-semibold text-[15px]'>${s}</div>
-        <div class='text-[11px] muted'>${arr.length} รายการ</div>
+        <div class='font-semibold text-[15px]'>${x.s}</div>
+        <div class='text-[11px] muted'>${x.count} รายการ</div>
       </div>
       <div class='mt-2 grid grid-cols-2 gap-2 text-[13px]'>
-        <div class='pill'>จำนวนคงเหลือ: <b>${qty.toFixed(4)}</b></div>
-        <div class='pill'>ต้นทุนเฉลี่ย: <b>${fUSD(avg)}</b></div>
-        <div class='pill'>ราคาปัจจุบัน: <b>${fUSD(cur)}</b></div>
-        <div class='pill'>มูลค่า: <b>${fUSD(mkt)}</b></div>
-        <div class='pill'>ค่าธรรมเนียมรวม: <b>${fUSD(fees)}</b></div>
-        <div class='pill ${pnlClass}'>P/L: <b>${fUSD(pnl)}</b></div>
+        <div class='pill'>จำนวนคงเหลือ: <b>${x.qty.toFixed(6)}</b></div>
+        <div class='pill'>มูลค่าปัจจุบัน: <b>${fUSD(x.mkt)}</b></div>
+        <div class='pill'>${info}</div>
+        <div class='pill ${cls}'>${prof}</div>
+        <div class='pill'>ค่าธรรมเนียมรวม: <b>${fUSD(x.fees)}</b></div>
       </div>
     </div>`;
   });
+
   box.innerHTML = cards.length? cards.join('') : `<div class='muted text-sm'>ยังไม่มีรายการ — เพิ่มด้วยฟอร์มด้านบน</div>`;
 }
 
-// Bind
+// ---------- OCR IMPORT (beta) ----------
+const TH_MONTH = {
+  "ม.ค.":1,"ก.พ.":2,"มี.ค.":3,"เม.ย.":4,"พ.ค.":5,"มิ.ย.":6,
+  "ก.ค.":7,"ส.ค.":8,"ก.ย.":9,"ต.ค.":10,"พ.ย.":11,"ธ.ค.":12
+};
+function beToCE(twoDigit){ // '68' -> 2568 -> 2025
+  const y = 2000 + parseInt(twoDigit,10); // 2068
+  const be = 2500 + parseInt(twoDigit,10); // 2568
+  const ce = be - 543; // 2025
+  return ce;
+}
+function parseThaiDate(s){
+  // e.g. "9 ส.ค. 68 - 00:30:10 น."
+  const m = s.match(/(\d{1,2})\s+([ก-힣\.]+)\s+(\d{2}).*?(\d{2}):(\d{2}):(\d{2})/);
+  if(!m) return null;
+  const d = parseInt(m[1],10);
+  const mon = TH_MONTH[m[2]] || 1;
+  const y = beToCE(m[3]);
+  const hh = m[4], mm = m[5], ss = m[6];
+  const iso = `${y}-${String(mon).padStart(2,'0')}-${String(d).padStart(2,'0')} ${hh}:${mm}:${ss}`;
+  return iso;
+}
+
+async function handleOCRFile(file){
+  const status = document.getElementById('ocrStatus');
+  status.textContent = 'กำลังอ่านภาพ... (OCR)';
+  const { createWorker } = Tesseract;
+  const worker = await createWorker('tha+eng'); // ไทย + อังกฤษ
+  const { data:{ text } } = await worker.recognize(file);
+  await worker.terminate();
+  status.textContent = 'แปลงข้อความแล้ว กำลังวิเคราะห์...';
+
+  const lines = text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+
+  // Very simple rules: ซื้อ/ขาย/ปันผล/ภาษี/ค่าธรรมเนียม
+  // ตัวอย่าง:
+  // "ซื้อ TSLS" + "60 หุ้น" + "ราคาที่ได้จริง 7.45" + "9 ส.ค. 68 - 00:32:30 น."
+  // "ขาย TSLA" + "1.6146146 หุ้น" + "ราคาที่ได้จริง 328.57" + "9 ส.ค. 68 - 00:30:10 น."
+  // "ปันผล JEPQ" + "0.24 USD" + "5 ส.ค. 68 - 21:39:42 น."
+  const results = [];
+  for(let i=0;i<lines.length;i++){
+    const L = lines[i];
+
+    // BUY / SELL
+    let m = L.match(/^(ซื้อ|ขาย)\s+([A-Z0-9\.]+)/i);
+    if(m){
+      const side = m[1]==='ซื้อ'?'BUY':'SELL';
+      const sym = m[2].toUpperCase();
+      // find qty
+      let qty=0, price=0, dateStr=null;
+      for(let j=i+1;j<Math.min(i+6,lines.length);j++){
+        const lj = lines[j];
+        const mq = lj.match(/([0-9\.\,]+)\s*หุ้น/);
+        if(mq) qty = parseFloat(mq[1].replace(/,/g,''));
+        const mp = lj.match(/ราคาที่ได้จริง\s*([0-9\.\,]+)/);
+        if(mp) price = parseFloat(mp[1].replace(/,/g,''));
+        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+      }
+      if(sym && qty && price){
+        results.push({ d: dateStr?.slice(0,10) || new Date().toISOString().slice(0,10), sym, side, qty, price, fee:0, fx:0, note:'OCR' });
+      }
+      continue;
+    }
+
+    // DIVIDEND
+    m = L.match(/^ปันผล\s+([A-Z0-9\.]+)/i);
+    if(m){
+      const sym = m[1].toUpperCase();
+      let amount=0, dateStr=null;
+      for(let j=i+1;j<Math.min(i+6,lines.length);j++){
+        const lj = lines[j];
+        const ma = lj.match(/([0-9\.\,]+)\s*USD/);
+        if(ma) amount = parseFloat(ma[1].replace(/,/g,''));
+        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+      }
+      // บันทึกเป็นรายการหมายเหตุ DIV
+      results.push({ d: dateStr?.slice(0,10) || new Date().toISOString().slice(0,10), sym, side:'DIV', qty:0, price:amount, fee:0, fx:0, note:'DIV OCR' });
+      continue;
+    }
+
+    // FEE / TAX
+    if(/ค่าธรรมเนียม|TAF Fee/i.test(L)){
+      let amount=0, dateStr=null;
+      for(let j=i+1;j<Math.min(i+4,lines.length);j++){
+        const lj = lines[j];
+        const ma = lj.match(/-?([0-9\.\,]+)\s*USD/);
+        if(ma) amount = parseFloat(ma[1].replace(/,/g,''));
+        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+      }
+      results.push({ d: dateStr?.slice(0,10) || new Date().toISOString().slice(0,10), sym:'CASH', side:'FEE', qty:0, price:0, fee:amount, fx:0, note:'FEE OCR' });
+      continue;
+    }
+    if(/ภาษีหัก|ภาษีหัก ณ/i.test(L)){
+      let amount=0, dateStr=null;
+      for(let j=i+1;j<Math.min(i+4,lines.length);j++){
+        const lj = lines[j];
+        const ma = lj.match(/-?([0-9\.\,]+)\s*USD/);
+        if(ma) amount = parseFloat(ma[1].replace(/,/g,''));
+        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+      }
+      results.push({ d: dateStr?.slice(0,10) || new Date().toISOString().slice(0,10), sym:'CASH', side:'TAX', qty:0, price:0, fee:amount, fx:0, note:'TAX OCR' });
+      continue;
+    }
+  }
+
+  if(results.length===0){
+    status.textContent = 'อ่านภาพเสร็จ แต่ยังจับรายการไม่ได้ — อัปโหลดภาพชัด ๆ หรือหลายภาพก็ได้';
+    return;
+  }
+  const arr = getTrades(); results.forEach(r=>arr.push(r)); setTrades(arr);
+  status.textContent = `เพิ่มรายการจาก OCR แล้ว ${results.length} รายการ`;
+  renderPortfolio();
+}
+
+document.getElementById('ocrFile').addEventListener('change', (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  handleOCRFile(f);
+});
+
+// ---- Bind UI ----
 document.getElementById('btnAddSymbol').addEventListener('click', addSymbol);
 document.getElementById('btnRefresh').addEventListener('click', renderWatchlist);
 document.getElementById('btnAddTrade').addEventListener('click', addTrade);
