@@ -4,104 +4,95 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0D1117">
-  <title>Dime Logger – Advisor v-advice-2025-08-09</title>
-  <link rel="manifest" href="manifest.webmanifest?v=v-advice-2025-08-09">
+  <title>Dime Advisor – Bitkub</title>
+  <link rel="manifest" href="manifest.webmanifest?v=advisor-divsum-2025-08-09">
   <link rel="apple-touch-icon" href="icon-192.png">
   <script>
-    window.APP_VERSION = "v-advice-2025-08-09";
     window.FINNHUB_API_KEY = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
+    window.APP_VERSION = "advisor-divsum-2025-08-09";
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
-      --bg: #0D1117; --panel:#0f131a; --line:#1f2632; --text:#E6EDF3; --muted:#9AA4B2;
-      --green:#00C087; --red:#F05454; --orange:#ffa726;
+      --bg:#0D1117; --panel:#0f131a; --line:#1f2632; --text:#E6EDF3; --muted:#9AA4B2;
+      --green:#00C087; --red:#F05454; --amber:#ffb020;
     }
     body { background:var(--bg); color:var(--text); }
     .card { background:#0f131a; border:1px solid var(--line); border-radius:16px; }
-    input, select { background:#0e1420; color:var(--text); border:1px solid var(--line); border-radius:12px; }
-    .btn { border-radius:12px; }
+    input, select, button { border-radius:12px; }
     .btn-primary { background:var(--green); color:#062b21; font-weight:700; }
     .pill { background:#0f1726; border:1px solid #223048; border-radius:999px; padding:.35rem .6rem; }
-    .header { background:#0c121b; border-bottom:1px solid var(--line); }
     .muted { color:var(--muted); }
-    .badge { font-size:11px; padding:.2rem .5rem; border-radius:999px; border:1px solid var(--line); }
-    .badge-earn { background:#1a1410; border-color:#3a2a18; color:#ffcc80; }
+    .tag { font-size:11px; padding:.25rem .5rem; border-radius:999px; }
+    .tag-red { background:#2a171a; color:#ffc9c9; border:1px solid #6a2b2f; }
+    .tag-green { background:#10291f; color:#b9f6de; border:1px solid #1f6a50; }
+    .tag-amber { background:#2a250f; color:#ffe7a3; border:1px solid #7a6820; }
+    .tag-cyan { background:#13313a; color:#a8f3ff; border:1px solid #1c6678; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
-  <header class="header p-4 sticky top-0 z-30">
+  <header class="p-4 sticky top-0 z-30" style="background:#0c121b; border-bottom:1px solid var(--line)">
     <div class="flex items-center justify-between">
-      <div class="font-bold text-lg">Dime Logger — Advisor</div>
-      <div class="text-xs muted">เวอร์ชัน: <span id="ver">v-advice-2025-08-09</span></div>
+      <div class="font-bold text-lg">Dime Advisor — Bitkub</div>
+      <div class="text-xs muted">เวอร์ชัน: advisor-divsum-2025-08-09</div>
     </div>
-    <div class="text-[11px] muted mt-1">อัปภาพ Dime → วิเคราะห์ → แนะนำขาย/ถือ</div>
+    <div class="text-[11px] muted mt-1">OCR อัปภาพจาก Dime → บันทึกอัตโนมัติ · คำนวณกำไร · เตือนงบ · แจ้งเตือนถึงเป้า · ป้ายหุ้นปันผล · สรุปเงินปันผล</div>
   </header>
 
   <main class="flex-1 p-4 space-y-4">
-    <!-- OCR FIRST -->
     <section class="card p-4">
-      <h2 class="font-semibold mb-2">📷 อัปโหลดภาพรายการจาก Dime (OCR)</h2>
-      <input id="ocrFile" type="file" accept="image/*" capture="environment" class="block w-full text-sm">
-      <div id="ocrStatus" class="text-xs muted mt-1"></div>
+      <h2 class="font-semibold">📷 อัปโหลดภาพจาก Dime (OCR บนมือถือ)</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+        <label class="btn-primary px-4 py-3 text-center">
+          <input id="fileList" type="file" accept="image/*" capture="environment" class="hidden">
+          📄 หน้ารายการทั้งหมด
+        </label>
+        <label class="btn-primary px-4 py-3 text-center" style="background:#09b076">
+          <input id="fileDetail" type="file" accept="image/*" capture="environment" class="hidden">
+          🧾 หน้ารายละเอียดคำสั่ง
+        </label>
+      </div>
+      <div id="ocrStatus" class="text-xs muted mt-2">ยังไม่ได้อัปภาพ</div>
     </section>
 
-    <!-- Settings -->
     <section class="card p-4">
-      <h2 class="font-semibold">เกณฑ์การแนะนำ</h2>
+      <h2 class="font-semibold">เกณฑ์คำแนะนำ & การแจ้งเตือน</h2>
       <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
-        <label>เป้ากำไร %<input id="setTP" type="number" step="0.1" value="5" class="w-full mt-1 px-2 py-2"></label>
-        <label>ตัดขาดทุน %<input id="setSL" type="number" step="0.1" value="10" class="w-full mt-1 px-2 py-2"></label>
-        <label>งบใกล้ออก (วัน)<input id="setE" type="number" step="1" value="3" class="w-full mt-1 px-2 py-2"></label>
+        <div><label class="muted text-xs">เป้ากำไร (TP %)</label><input id="tp" type="number" step="0.1" value="5" class="w-full px-3 py-2" /></div>
+        <div><label class="muted text-xs">ตัดขาดทุน (SL %)</label><input id="sl" type="number" step="0.1" value="-10" class="w-full px-3 py-2" /></div>
+        <div><label class="muted text-xs">งบใกล้ออก (วัน)</label><input id="earnDays" type="number" step="1" value="3" class="w-full px-3 py-2" /></div>
+      </div>
+      <div class="mt-3 text-sm">
+        <button id="btnNotif" class="btn-primary px-4 py-2">อนุญาตการแจ้งเตือน</button>
+        <span class="text-xs muted ml-2">ระบบจะเช็คราคา/กำไรทุก 1 นาที และเด้งแจ้งเตือนเมื่อถึงเป้า</span>
       </div>
     </section>
 
-    <!-- Quick add trade -->
     <section class="card p-4">
       <div class="flex items-center justify-between">
-        <h2 class="font-semibold">บันทึกซื้อ–ขาย (Quick Add)</h2>
-        <span class="text-xs pill muted">เก็บข้อมูลในเครื่อง</span>
-      </div>
-      <div class="grid grid-cols-2 gap-2 mt-3">
-        <input id="tradeDate" type="date" title="วันที่">
-        <input id="tradeSymbol" placeholder="สัญลักษณ์ เช่น TSLA" title="สัญลักษณ์">
-        <select id="tradeSide" title="ฝั่งคำสั่ง">
-          <option value="BUY">BUY</option>
-          <option value="SELL">SELL</option>
-        </select>
-        <input id="tradeQty" type="number" step="0.000001" placeholder="จำนวน (หุ้น/หน่วย)" title="จำนวน">
-        <input id="tradePrice" type="number" step="0.0001" placeholder="ราคา/หุ้น (USD)" title="ราคา">
-        <input id="tradeFee" type="number" step="0.01" placeholder="ค่าธรรมเนียม (USD)" title="ค่าธรรมเนียม">
-        <input id="tradeNote" placeholder="หมายเหตุ (ไม่บังคับ)" title="หมายเหตุ">
-      </div>
-      <div class="mt-3 flex gap-2 flex-wrap">
-        <button id="btnAddTrade" class="btn btn-primary px-4 py-2">บันทึก</button>
-        <button id="btnExportCsv" class="btn px-3 py-2 bg-[#1f2632] hover:opacity-90">Export CSV</button>
-        <button id="btnClearAll" class="btn px-3 py-2" style="background:#2a171a; color:#f2b8b8;">ล้างข้อมูลทั้งหมด</button>
-      </div>
-    </section>
-
-    <!-- Portfolio summary + recommendations -->
-    <section class="card p-4">
-      <div class="flex items-center justify-between">
-        <h2 class="font-semibold">สรุปพอร์ต & คำแนะนำ</h2>
-        <div class="text-xs muted">เรียง: ถืออยู่มาก → น้อย · มีป้าย “งบใกล้ออก”</div>
+        <h2 class="font-semibold">พอร์ตของฉัน & คำแนะนำ</h2>
+        <button id="btnRefresh" class="px-3 py-2" style="background:#1f2632; border-radius:12px">รีเฟรช</button>
       </div>
       <div id="portfolio" class="mt-3 grid grid-cols-1 gap-3"></div>
     </section>
+
+    <section class="card p-4">
+      <h2 class="font-semibold">สรุปเงินปันผล (USD)</h2>
+      <div id="divSummary" class="mt-2 text-sm"></div>
+    </section>
+
+    <section class="card p-4">
+      <h2 class="font-semibold">บันทึกดิบ (เช็ค OCR)</h2>
+      <pre id="raw" class="text-xs whitespace-pre-wrap mt-2"></pre>
+    </section>
   </main>
 
-  <footer class="p-4 text-center text-xs muted">
-    ไม่มีการรับประกันผลกำไร การลงทุนมีความเสี่ยง · PWA ทำงานออฟไลน์บางส่วน
-  </footer>
-
-  <script src="app.js?v=v-advice-2025-08-09"></script>
+  <footer class="p-4 text-center text-xs muted">PWA · ทำงานออฟไลน์บางส่วน · เก็บข้อมูลเฉพาะในเครื่อง</footer>
+  <script src="app.js?v=advisor-divsum-2025-08-09"></script>
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js?v=v-advice-2025-08-09'));
-    }
+    if('serviceWorker' in navigator) { window.addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js?v=advisor-divsum-2025-08-09')); }
   </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {
-  "name": "Dime Logger — Bitkub (Advice)",
-  "short_name": "Dime Logger",
+  "name": "Dime Advisor — Bitkub (OCR + Alerts + Div Summary)",
+  "short_name": "Dime Advisor",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0D1117",

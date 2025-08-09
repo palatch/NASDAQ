@@ -1,300 +1,320 @@
-// Advisor build: OCR + earnings calendar + recommendations
-const LS_KEYS = { TRADES:'dm_bk_trades', SETTINGS:'dm_bk_settings' };
+// Advisor with OCR-only input, alerts, dividend labeling & summary
+const LS_TRADES = 'dm_adv_trades';
 const apiKey = window.FINNHUB_API_KEY;
 
-function getTrades(){ try{ return JSON.parse(localStorage.getItem(LS_KEYS.TRADES))||[]; } catch{ return []; } }
-function setTrades(v){ localStorage.setItem(LS_KEYS.TRADES, JSON.stringify(v)); }
-function getSettings(){
-  try{ return JSON.parse(localStorage.getItem(LS_KEYS.SETTINGS))||{tp:5, sl:10, earnDays:3}; }
-  catch{ return {tp:5, sl:10, earnDays:3}; }
-}
-function setSettings(s){ localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(s)); }
+// storage
+function getTrades(){ try{return JSON.parse(localStorage.getItem(LS_TRADES))||[]}catch{return[]} }
+function setTrades(v){ localStorage.setItem(LS_TRADES, JSON.stringify(v)); }
 
-async function fetchQuote(symbol){
-  const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
-  const res = await fetch(url); if(!res.ok) throw new Error('quote failed'); return res.json();
-}
-async function fetchCandles(symbol){
-  try{
-    const now = Math.floor(Date.now()/1000), from = now - 86400*7;
-    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${now}&token=${apiKey}`;
-    const r = await fetch(url); if(!r.ok) throw new Error('candle');
-    const d = await r.json(); if(d.s!=='ok') throw new Error('no');
-    return d;
-  }catch(e){ return null; }
-}
-// Pull earnings calendar for the next 21 days then filter
-async function fetchUpcomingEarnings(symbols, days){
-  const from = new Date().toISOString().slice(0,10);
-  const to = new Date(Date.now()+days*86400000).toISOString().slice(0,10);
-  const url = `https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&token=${apiKey}`;
-  const r = await fetch(url); if(!r.ok) return {};
-  const d = await r.json();
-  const list = d.earningsCalendar || [];
-  const set = new Set(symbols.map(s=>s.toUpperCase()));
-  const out = {};
-  list.forEach(it=>{
-    const sym = (it.symbol||it.SYMBOL||'').toUpperCase();
-    if(set.has(sym)) out[sym] = it.date || it.DATE || it['earningsDate'];
-  });
-  return out;
-}
-
-const fUSD = (n)=> Number.isFinite(n)? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'-';
-
-function addTrade(){
-  const d = document.getElementById('tradeDate').value || new Date().toISOString().slice(0,10);
-  const sym = (document.getElementById('tradeSymbol').value||'').trim().toUpperCase();
-  const side = document.getElementById('tradeSide').value;
-  const qty = parseFloat(document.getElementById('tradeQty').value||'0');
-  const price = parseFloat(document.getElementById('tradePrice').value||'0');
-  const fee = parseFloat(document.getElementById('tradeFee').value||'0');
-  const note = document.getElementById('tradeNote').value||'';
-  if(!sym || (!qty && (side==='BUY'||side==='SELL'))) { alert('กรอก Symbol / จำนวน ให้ครบ'); return; }
-  const arr = getTrades(); arr.push({d,sym,side,qty,price,fee,note,ts:Date.now()}); setTrades(arr);
-  ['tradeQty','tradePrice','tradeFee','tradeNote','tradeSymbol'].forEach(id=>document.getElementById(id).value='');
-  renderPortfolio();
-}
-
-function exportCsv(){
-  const rows = getTrades();
-  const header = ['date','symbol','side','qty','price_usd','fee_usd','note'];
-  const lines = [header.join(',')].concat(rows.map(r=>[r.d,r.sym,r.side,r.qty,r.price,r.fee,'"'+(r.note||'').replace(/"/g,'""')+'"'].join(',')));
-  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='trades.csv'; a.click(); URL.revokeObjectURL(url);
-}
-function clearAll(){ if(!confirm('ล้างข้อมูลทั้งหมดในเครื่องนี้?')) return; localStorage.removeItem(LS_KEYS.TRADES); renderPortfolio(); }
-
-function saveSettingsUI(){
-  const s = { tp:parseFloat(document.getElementById('setTP').value||'5'), sl:parseFloat(document.getElementById('setSL').value||'10'), earnDays:parseInt(document.getElementById('setE').value||'3') };
-  setSettings(s); renderPortfolio();
-}
-
-document.getElementById('setTP').addEventListener('input', saveSettingsUI);
-document.getElementById('setSL').addEventListener('input', saveSettingsUI);
-document.getElementById('setE').addEventListener('input', saveSettingsUI);
-
-// ---- OCR (simplified; preprocessing by drawing to canvas for contrast) ----
+// helpers
 const TH_MONTH = { "ม.ค.":1,"ก.พ.":2,"มี.ค.":3,"เม.ย.":4,"พ.ค.":5,"มิ.ย.":6,"ก.ค.":7,"ส.ค.":8,"ก.ย.":9,"ต.ค.":10,"พ.ย.":11,"ธ.ค.":12 };
-function beToCE(twoDigit){ return (2500 + parseInt(twoDigit||'0',10)) - 543; }
+function beToCE(y){ const n=parseInt(y,10); return n>2400? n-543 : 2000+(n%100); }
 function parseThaiDate(s){
-  const m = s.match(/(\d{1,2})\s+([ก-힣\.]+)\s+(\d{2}).*?(\d{2}):(\d{2}):(\d{2})/);
+  const m = s.match(/(\d{1,2})\s+([ก-힣\.]+)\s+(256\d|\d{2}).*?(\d{2}):(\d{2})(?::(\d{2}))?/);
   if(!m) return null;
-  const d = parseInt(m[1],10), mon = TH_MONTH[m[2]]||1, y = beToCE(m[3]);
-  const hh = m[4], mm = m[5], ss = m[6];
-  return `${y}-${String(mon).padStart(2,'0')}-${String(d).padStart(2,'0')} ${hh}:${mm}:${ss}`;
+  const d = String(parseInt(m[1],10)).padStart(2,'0');
+  const mon = String(TH_MONTH[m[2]]||1).padStart(2,'0');
+  const yyyy = String(beToCE(m[3]));
+  const hh = m[4], mm = m[5], ss = m[6]||'00';
+  return `${yyyy}-${mon}-${d} ${hh}:${mm}:${ss}`;
 }
-async function handleOCRFile(file){
-  const status = document.getElementById('ocrStatus');
-  status.textContent = 'กำลังปรับภาพ + อ่าน OCR...';
-  // preprocess to canvas (increase contrast)
-  const img = new Image();
-  const reader = new FileReader();
-  const url = await new Promise(res=>{ reader.onload=()=>res(reader.result); reader.readAsDataURL(file); });
-  img.src = url; await new Promise(r=>{ img.onload=r; });
-  const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
-  const ctx = canvas.getContext('2d'); ctx.drawImage(img,0,0);
-  const data = ctx.getImageData(0,0,canvas.width,canvas.height);
-  // simple contrast/threshold
-  for(let i=0;i<data.data.length;i+=4){
-    const g = 0.299*data.data[i]+0.587*data.data[i+1]+0.114*data.data[i+2];
-    const v = g>140?255: (g<110?0: g*1.2);
-    data.data[i]=data.data[i+1]=data.data[i+2]=v;
-  }
-  ctx.putImageData(data,0,0);
+function toUSD(n){ return Number.isFinite(n) ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n) : '-'; }
 
-  const processedBlob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
-  const { createWorker } = Tesseract;
-  const worker = await createWorker('tha+eng');
-  const { data:{ text } } = await worker.recognize(processedBlob);
+async function preprocess(file){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas'); c.width=img.width; c.height=img.height;
+      const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
+      const id = ctx.getImageData(0,0,c.width,c.height), data=id.data;
+      for(let i=0;i<data.length;i+=4){
+        const g = data[i]*.299 + data[i+1]*.587 + data[i+2]*.114;
+        const v = Math.max(0,Math.min(255,1.35*(g-128)+128));
+        data[i]=data[i+1]=data[i+2]=v;
+      }
+      ctx.putImageData(id,0,0);
+      c.toBlob(b=>resolve(b),'image/png',1.0);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function runOCR(blob){
+  const worker = await Tesseract.createWorker('tha+eng');
+  const { data:{ text } } = await worker.recognize(blob);
   await worker.terminate();
-  status.textContent = 'กำลังวิเคราะห์ข้อความ...';
+  return text;
+}
 
+// parsers
+function parseDetail(text){
   const lines = text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-  const results = [];
-
+  let side=null, sym=null, qty=null, price=null, dateISO=null;
   for(let i=0;i<lines.length;i++){
     const L = lines[i];
-
+    let m = L.match(/^(ซื้อ|ขาย)\s+([A-Z0-9\.]+)/i);
+    if(m){ side = m[1]==='ซื้อ'?'BUY':'SELL'; sym = m[2].toUpperCase(); continue; }
+    m = L.match(/([0-9\.,]+)\s*หุ้น/); if(m){ qty=parseFloat(m[1].replace(/,/g,'')); continue; }
+    m = L.match(/ราคาที่ได้จริง\s*([0-9\.,]+)/); if(m){ price=parseFloat(m[1].replace(/,/g,'')); continue; }
+    if(!dateISO && /(\d{1,2})\s+[ก-힣\.]+\s+(256\d|\d{2}).*(\d{2}):(\d{2})/.test(L)){ dateISO = parseThaiDate(L); }
+  }
+  if(side && sym && qty!=null && price!=null){
+    return [{ d:(dateISO||new Date().toISOString().slice(0,10)), sym, side, qty, price, fee:0, fx:0, note:'OCR:DETAIL', ts:Date.now() }];
+  }
+  return [];
+}
+function parseList(text){
+  const lines = text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const out = [];
+  for(let i=0;i<lines.length;i++){
+    const L = lines[i];
     let m = L.match(/^(ซื้อ|ขาย)\s+([A-Z0-9\.]+)/i);
     if(m){
       const side = m[1]==='ซื้อ'?'BUY':'SELL';
       const sym = m[2].toUpperCase();
-      let qty=0, price=0, dateStr=null;
+      let qty=null, price=null, dateISO=null;
       for(let j=i+1;j<Math.min(i+6,lines.length);j++){
         const lj = lines[j];
-        const mq = lj.match(/([0-9\.\,]+)\s*หุ้น/);
+        const mq = lj.match(/จำนวนหุ้น\s*([0-9\.,]+)/i) || lj.match(/([0-9\.,]+)\s*หุ้น/);
         if(mq) qty = parseFloat(mq[1].replace(/,/g,''));
-        const mp = lj.match(/ราคาที่ได้จริง\s*([0-9\.\,]+)/);
+        const mp = lj.match(/ราคาที่ได้จริง\s*([0-9\.,]+)/);
         if(mp) price = parseFloat(mp[1].replace(/,/g,''));
-        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+        if(!dateISO && /\d{1,2}\s+[ก-힣\.]+\s+(256\d|\d{2}).*\d{2}:\d{2}/.test(lj)) dateISO = parseThaiDate(lj);
       }
-      if(sym && qty && price){
-        results.push({ d: (dateStr||'').slice(0,10) || new Date().toISOString().slice(0,10), sym, side, qty, price, fee:0, note:'OCR' });
+      if(sym && qty!=null && price!=null){
+        out.push({ d:(dateISO||new Date().toISOString().slice(0,10)), sym, side, qty, price, fee:0, fx:0, note:'OCR:LIST', ts:Date.now() });
       }
       continue;
     }
-
+    // Dividend
     m = L.match(/^ปันผล\s+([A-Z0-9\.]+)/i);
     if(m){
-      const sym = m[1].toUpperCase(); let amount=0, dateStr=null;
+      const sym = m[1].toUpperCase(); let amount=null, dateISO=null;
       for(let j=i+1;j<Math.min(i+6,lines.length);j++){
         const lj = lines[j];
-        const ma = lj.match(/([0-9\.\,]+)\s*(USD|บาท)/i);
-        if(ma) amount = parseFloat(ma[1].replace(/,/g,''));
-        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+        const ma = lj.match(/([0-9\.,]+)\s*USD/); if(ma) amount=parseFloat(ma[1].replace(/,/g,''));
+        if(!dateISO && /\d{1,2}\s+[ก-힣\.]+\s+(256\d|\d{2}).*\d{2}:\d{2}/.test(lj)) dateISO = parseThaiDate(lj);
       }
-      results.push({ d: (dateStr||'').slice(0,10) || new Date().toISOString().slice(0,10), sym, side:'DIV', qty:0, price:amount, fee:0, note:'DIV OCR' });
+      if(amount!=null){ out.push({ d:(dateISO||new Date().toISOString().slice(0,10)), sym, side:'DIV', qty:0, price:amount, fee:0, fx:0, note:'DIV OCR', ts:Date.now() }); }
       continue;
     }
-
+    // Fee/Tax
     if(/ค่าธรรมเนียม|TAF Fee/i.test(L)){
-      let amount=0, dateStr=null;
+      let amount=null, dateISO=null;
       for(let j=i+1;j<Math.min(i+4,lines.length);j++){
         const lj = lines[j];
-        const ma = lj.match(/-?([0-9\.\,]+)\s*(USD|บาท)/i);
-        if(ma) amount = parseFloat(ma[1].replace(/,/g,''));
-        if(!dateStr && /\d{1,2}\s+[ก-힣\.]+\s+\d{2}.*\d{2}:\d{2}:\d{2}/.test(lj)) dateStr = parseThaiDate(lj);
+        const ma = lj.match(/-?([0-9\.,]+)\s*USD/); if(ma) amount=parseFloat(ma[1].replace(/,/g,''));
+        if(!dateISO && /\d{1,2}\s+[ก-힣\.]+\s+(256\d|\d{2}).*\d{2}:\d{2}/.test(lj)) dateISO = parseThaiDate(lj);
       }
-      results.push({ d: (dateStr||'').slice(0,10) || new Date().toISOString().slice(0,10), sym:'CASH', side:'FEE', qty:0, price:0, fee:amount, note:'FEE OCR' });
+      if(amount!=null){ out.push({ d:(dateISO||new Date().toISOString().slice(0,10)), sym:'CASH', side:'FEE', qty:0, price:0, fee:amount, fx:0, note:'FEE OCR', ts:Date.now() }); }
       continue;
     }
   }
-
-  if(results.length===0){ status.textContent = 'อ่านภาพเสร็จแต่ยังจับรายการไม่ได้ ลองซูมหรือส่งรูปที่คมชัดขึ้น'; return; }
-  const arr = getTrades(); results.forEach(r=>arr.push(r)); setTrades(arr);
-  status.textContent = `เพิ่มจาก OCR แล้ว ${results.length} รายการ`;
-  renderPortfolio();
+  return out;
 }
 
-// ---- Recommendations ----
-function buildAdvice(item, earningsDate, settings, momentumSlope){
-  const { tp, sl, earnDays } = settings;
-  const now = new Date();
-  let daysToEarnings = null;
-  if(earningsDate){
-    const d = new Date(earningsDate);
-    daysToEarnings = Math.ceil((d - now)/86400000);
-  }
-  const tags = [];
-  if(daysToEarnings!==null && daysToEarnings <= earnDays) tags.push(`งบใน ${daysToEarnings} วัน`);
-  if(momentumSlope!==null){
-    tags.push(momentumSlope>=0 ? 'โมเมนตัมบวก' : 'โมเมนตัมลบ');
-  }
-
-  let action = 'ถือ';
-  let holdDays = null;
-
-  // Profit/Loss percent
-  const pnlPct = item.pnlPct;
-
-  if(pnlPct >= tp){
-    action = (daysToEarnings!==null && daysToEarnings<=earnDays && momentumSlope<0) ? 'ควรขาย' : 'พิจารณาขาย';
-  }else if(pnlPct <= -sl){
-    action = 'พิจารณาตัดขาดทุน';
-  }else{
-    if(momentumSlope>0 && (daysToEarnings===null || daysToEarnings>earnDays)){
-      holdDays = Math.min(5, Math.max(2, Math.round(momentumSlope*10))); // heuristic
-      action = `ถืออีก ~${holdDays} วัน`;
-    }else if(daysToEarnings!==null && daysToEarnings<=earnDays){
-      action = 'พิจารณาขายบางส่วน';
-    }else{
-      action = 'ถือ';
-    }
-  }
-
-  return { action, tags };
+// market data
+async function fetchQuote(symbol){
+  const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
+  const res = await fetch(url); if(!res.ok) throw new Error('quote fail'); return res.json();
+}
+async function fetchCandles(symbol){
+  try{
+    const now = Math.floor(Date.now()/1000), from = now - 86400*8;
+    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${now}&token=${apiKey}`;
+    const r = await fetch(url); if(!r.ok) return null; const d = await r.json(); if(d.s!=='ok') return null; return d;
+  }catch{return null}
+}
+async function fetchEarningsUpcoming(symbol, days){
+  try{
+    const d0 = new Date(); const d1 = new Date(Date.now()+days*86400000);
+    const fmt = d=>d.toISOString().slice(0,10);
+    const url = `https://finnhub.io/api/v1/calendar/earnings?from=${fmt(d0)}&to=${fmt(d1)}&symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
+    const r = await fetch(url); if(!r.ok) return null; const j = await r.json();
+    const arr = j.earningsCalendar || j.result || [];
+    return arr && arr.length ? arr[0] : null;
+  }catch{return null}
+}
+function slope5(candles){
+  if(!candles) return 0;
+  const arr = candles.c || []; if(arr.length<2) return 0;
+  const last = arr.slice(-5); if(last.length<2) return 0;
+  return (last[last.length-1]-last[0])/last[0]*100;
 }
 
-async function renderPortfolio(){
-  const s = getSettings();
-  document.getElementById('setTP').value = s.tp;
-  document.getElementById('setSL').value = s.sl;
-  document.getElementById('setE').value = s.earnDays;
+// advice
+function advise({tp, sl, earnDays, isDividend}, pos){
+  if(isDividend){
+    return { decision:'ถือรับปันผล', tags:[{k:'หุ้นปันผล', t:'tag-cyan'}], reason:'มีประวัติรับปันผลจาก OCR', gainPct: pos.avg?((pos.cur-pos.avg)/pos.avg*100):0 };
+  }
+  const gainPct = pos.avg? ((pos.cur-pos.avg)/pos.avg*100) : 0;
+  const tags=[]; const reason=[];
+  if(pos.earnSoon){ tags.push({k:'งบใกล้ออก', t:'tag-amber'}); reason.push(`งบใน ${earnDays} วัน`); }
+  if(gainPct >= tp){ tags.push({k:`กำไร ≥ ${tp}%`, t:'tag-green'}); }
+  if(gainPct <= sl){ tags.push({k:`ขาดทุน ≤ ${sl}%`, t:'tag-red'}); }
+  if(pos.momo >= 0.5){ tags.push({k:`ขาขึ้น ${pos.momo.toFixed(1)}%/5วัน`, t:'tag-green'}); }
+  if(pos.momo <= -0.5){ tags.push({k:`ขาลง ${pos.momo.toFixed(1)}%/5วัน`, t:'tag-red'}); }
 
-  const box = document.getElementById('portfolio'); const rows = getTrades();
-  const by = {}; rows.forEach(r=>{ if(r.sym){ (by[r.sym]=by[r.sym]||[]).push(r); } });
+  let decision='ถือรอต่อ';
+  if(gainPct >= tp && pos.momo <= 0){ decision='ควรขาย'; reason.push('กำไรถึงเป้า + โมเมนตัมลบ/แผ่ว'); }
+  else if(pos.earnSoon && gainPct > 0){ decision='พิจารณาขายบางส่วน'; reason.push('ใกล้งบและมีกำไร'); }
+  else if(gainPct <= sl){ decision='พิจารณาตัดขาดทุน'; reason.push('ถึงจุด SL'); }
+  else if(pos.momo > 0){ decision='ถืออีก 3–5 วัน'; reason.push('แนวโน้มบวก'); }
+  else { decision='ถือรอดู 1–2 วัน'; reason.push('ยังไม่ชัด'); }
+
+  return { decision, tags, reason: reason.join(' · '), gainPct };
+}
+
+// portfolio & div summary
+async function renderAll(){
+  const tp = parseFloat(document.getElementById('tp').value||'5');
+  const sl = parseFloat(document.getElementById('sl').value||'-10');
+  const earnDays = parseInt(document.getElementById('earnDays').value||'3',10);
+
+  const rows = getTrades();
+  // dividend summary
+  const divByMonth = {}; let divYear=0;
+  rows.filter(r=>r.side==='DIV').forEach(r=>{
+    const d = (r.d||'').slice(0,10);
+    const y = d.slice(0,4), m = d.slice(5,7);
+    const key = `${y}-${m}`;
+    divByMonth[key] = (divByMonth[key]||0) + (r.price||0);
+    divYear += (r.price||0);
+  });
+  const sumBox = document.getElementById('divSummary');
+  const months = Object.keys(divByMonth).sort();
+  sumBox.innerHTML = months.length? 
+    `<div class='grid grid-cols-2 gap-2'>${months.map(k=>`<div class='pill flex justify-between'><span>${k}</span><b>${toUSD(divByMonth[k])}</b></div>`).join('')}</div>
+     <div class='mt-2'>รวมปีนี้: <b>${toUSD(divYear)}</b></div>`
+    : `<div class='text-sm muted'>ยังไม่มีรายการปันผล</div>`;
+
+  const by = {}; rows.forEach(r=>{ if(r.sym && r.sym!=='CASH'){ (by[r.sym]=by[r.sym]||[]).push(r); } });
   const syms = Object.keys(by);
-  if(syms.length===0){ box.innerHTML = `<div class='text-sm muted'>ยังไม่มีรายการ — อัปโหลดภาพหรือกรอกด้วยฟอร์มด้านบน</div>`; return; }
+  const box = document.getElementById('portfolio');
+  if(!syms.length){ box.innerHTML = `<div class='text-sm muted'>ยังไม่มีรายการจาก OCR — อัปโหลดรูปจาก Dime ก่อน</div>`; return; }
 
-  // quotes, candles, earnings in parallel
-  const quotes = {}; const candles = {};
+  const quotes={}, candles={}, earnings={};
   await Promise.all(syms.map(async s=>{
-    try{ quotes[s]=await fetchQuote(s); } catch{ quotes[s]=null; }
-    try{ candles[s]=await fetchCandles(s); } catch{ candles[s]=null; }
+    try{ quotes[s]=await fetchQuote(s); }catch{ quotes[s]=null; }
+    candles[s]=await fetchCandles(s);
+    earnings[s]=await fetchEarningsUpcoming(s, earnDays);
   }));
-  const earnMap = await fetchUpcomingEarnings(syms, 21);
 
-  // compute per symbol
   let items = syms.map(s=>{
-    const q = quotes[s]; const arr = by[s];
-    let qty=0, cost=0, fees=0;
-    arr.forEach(r=>{
+    let qty=0, cost=0, fees=0, hasDiv=false;
+    by[s].forEach(r=>{
       if(r.side==='BUY'){ qty+=r.qty; cost+=r.qty*r.price; fees+=r.fee||0; }
       else if(r.side==='SELL'){ qty-=r.qty; cost-=r.qty*(cost/Math.max(qty+r.qty,1)); fees+=r.fee||0; }
+      else if(r.side==='FEE'){ fees+=r.fee||0; }
+      else if(r.side==='DIV'){ hasDiv=true; }
     });
-    const avg = qty!==0? cost/qty : 0;
-    const cur = q && q.c? q.c : 0;
+    const avg = qty? cost/qty : 0;
+    const cur = quotes[s]?.c || 0;
+    const momo = slope5(candles[s]);
+    const earnSoon = !!earnings[s];
     const mkt = qty*cur;
     const pnl = qty*(cur-avg)-fees;
-    const pnlPct = avg!==0 ? ((cur-avg)/avg*100) : 0;
-    const investedNow = qty>0 ? qty*avg : 0;
-    // momentum slope (last 5 daily closes)
-    let slope = null;
-    const c = candles[s]; if(c && Array.isArray(c.c) && c.c.length>=5){
-      const last = c.c.slice(-5);
-      slope = (last[4]-last[0]) / last[0]; // relative change over 5 days
-    }
-    return { s, qty, avg, cur, mkt, fees, pnl, pnlPct, investedNow, count: arr.length, slope };
+    const pnlPct = avg? (cur-avg)/avg*100 : 0;
+
+    const adv = advise({tp, sl, earnDays, isDividend: hasDiv}, {avg, cur, qty, earnSoon, momo});
+    return { s, qty, avg, cur, mkt, fees, pnl, pnlPct, adv, count: by[s].length, earn: earnings[s], hasDiv };
   });
 
-  // sort: holding first by invested value desc
-  items.sort((a,b)=> (b.investedNow>0)-(a.investedNow>0) || b.investedNow - a.investedNow || a.s.localeCompare(b.s));
+  items.sort((a,b)=> (b.adv.tags.some(t=>t.k.includes('งบใกล้ออก')) - a.adv.tags.some(t=>t.k.includes('งบใกล้ออก'))) 
+                    || b.mkt - a.mkt );
 
-  // build cards
-  const cards = items.map(x=>{
-    const earnDate = earnMap[x.s];
-    const adv = buildAdvice(x, earnDate, s, x.slope);
-    const cls = x.pnl>=0 ? 'text-[var(--green)]' : 'text-[var(--red)]';
-    const earnBadge = earnDate ? `<span class='badge badge-earn'>งบ: ${earnDate}</span>` : '';
-    const tagStr = adv.tags.length? adv.tags.map(t=>`<span class='badge'>${t}</span>`).join(' ') : '';
+  box.innerHTML = items.map(x=>{
+    const tags = [...x.adv.tags];
+    if(x.hasDiv && !tags.some(t=>t.k==='หุ้นปันผล')) tags.unshift({k:'หุ้นปันผล', t:'tag-cyan'});
+    const tagHtml = tags.map(t=>`<span class="tag ${t.t}">${t.k}</span>`).join(' ');
+    const earnTxt = x.earn ? `<div class='text-xs muted'>งบ: ${x.earn.date || x.earn.EPSReportDate || ''}</div>` : '';
+    const pnlCls = x.pnl>=0 ? 'text-[var(--green)]' : 'text-[var(--red)]';
     return `<div class='p-4 card'>
-      <div class='flex items-center justify-between'>
-        <div class='font-semibold text-[15px]'>${x.s} ${earnBadge}</div>
+      <div class='flex items-center justify-between gap-2'>
+        <div class='font-semibold text-[15px]'>${x.s}</div>
         <div class='text-[11px] muted'>${x.count} รายการ</div>
       </div>
+      <div class='mt-2 flex flex-wrap gap-2'>${tagHtml}</div>
+      ${earnTxt}
       <div class='mt-2 grid grid-cols-2 gap-2 text-[13px]'>
         <div class='pill'>จำนวนคงเหลือ: <b>${x.qty.toFixed(6)}</b></div>
-        <div class='pill'>มูลค่าปัจจุบัน: <b>${fUSD(x.mkt)}</b></div>
-        <div class='pill'>ราคาเฉลี่ยซื้อ: <b>${fUSD(x.avg)}</b> · ปัจจุบัน: <b>${fUSD(x.cur)}</b></div>
-        <div class='pill ${cls}'>กำไร: <b>${fUSD(x.pnl)}</b> (${x.pnlPct.toFixed(2)}%)</div>
+        <div class='pill'>มูลค่าปัจจุบัน: <b>${toUSD(x.mkt)}</b></div>
+        <div class='pill'>ราคาเฉลี่ยซื้อ: <b>${toUSD(x.avg)}</b> · ปัจจุบัน: <b>${toUSD(x.cur)}</b></div>
+        <div class='pill ${pnlCls}'>กำไร: <b>${toUSD(x.pnl)}</b> (${x.pnlPct.toFixed(2)}%)</div>
       </div>
-      <div class='mt-3 flex items-center justify-between'>
-        <div class='text-sm'>คำแนะนำ: <b>${adv.action}</b></div>
-        <div class='text-xs muted'>${tagStr}</div>
-      </div>
+      <div class='mt-2 text-sm'><b>คำแนะนำ:</b> ${x.adv.decision} — <span class='muted'>${x.adv.reason||''}</span></div>
     </div>`;
-  });
-
-  box.innerHTML = cards.join('');
+  }).join('');
 }
 
-// --------- OCR binding ---------
-document.getElementById('ocrFile').addEventListener('change', (e)=>{
-  const f = e.target.files?.[0]; if(!f) return; handleOCRFile(f);
+// Alerts
+let alertTimer=null;
+async function checkAlerts(){
+  const tp = parseFloat(document.getElementById('tp').value||'5');
+  const sl = parseFloat(document.getElementById('sl').value||'-10');
+  const rows = getTrades();
+  const by = {}; rows.forEach(r=>{ if(r.sym && r.sym!=='CASH'){ (by[r.sym]=by[r.sym]||[]).push(r); } });
+  const syms = Object.keys(by);
+  for(const s of syms){
+    let qty=0, cost=0;
+    by[s].forEach(r=>{
+      if(r.side==='BUY'){ qty+=r.qty; cost+=r.qty*r.price; }
+      else if(r.side==='SELL'){ qty-=r.qty; cost-=r.qty*(cost/Math.max(qty+r.qty,1)); }
+    });
+    const avg = qty? cost/qty : 0;
+    try{
+      const q = await fetchQuote(s);
+      const cur = q?.c || 0;
+      const gainPct = avg? (cur-avg)/avg*100 : 0;
+      if(gainPct >= tp){
+        new Notification(`🎯 ถึงเป้ากำไร ${tp}%`, { body:`${s} กำไร ~${gainPct.toFixed(1)}%` });
+      } else if(gainPct <= sl){
+        new Notification(`⚠️ ถึงจุดขาดทุน ${sl}%`, { body:`${s} ขาดทุน ~${gainPct.toFixed(1)}%` });
+      }
+    }catch{}
+  }
+}
+function startAlerts(){
+  if(alertTimer) clearInterval(alertTimer);
+  alertTimer = setInterval(checkAlerts, 60_000);
+}
+
+// Bind UI
+document.getElementById('fileList').addEventListener('change', async (e)=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  const status = document.getElementById('ocrStatus'); status.textContent='กำลังอ่านภาพ (รายการรวม)...';
+  const blob = await preprocess(f); const text = await runOCR(blob||f);
+  document.getElementById('raw').textContent = text.slice(0,2000);
+  const rows = parseList(text);
+  if(!rows.length){ status.textContent='อ่านไม่สำเร็จ — ซูมให้ใหญ่ขึ้น/แคปชัด ๆ แล้วลองใหม่'; return; }
+  const arr = getTrades(); rows.forEach(r=>arr.push(r)); setTrades(arr);
+  status.textContent = `เพิ่มรายการแล้ว ${rows.length} รายการ (หน้ารายการรวม)`;
+  renderAll();
+});
+document.getElementById('fileDetail').addEventListener('change', async (e)=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  const status = document.getElementById('ocrStatus'); status.textContent='กำลังอ่านภาพ (รายละเอียดคำสั่ง)...';
+  const blob = await preprocess(f); const text = await runOCR(blob||f);
+  document.getElementById('raw').textContent = text.slice(0,2000);
+  const rows = parseDetail(text);
+  if(!rows.length){ status.textContent='อ่านไม่สำเร็จ — ซูมให้ใหญ่ขึ้น/แคปชัด ๆ แล้วลองใหม่'; return; }
+  const arr = getTrades(); rows.forEach(r=>arr.push(r)); setTrades(arr);
+  status.textContent = `เพิ่มรายการแล้ว ${rows.length} รายการ (หน้ารายละเอียด)`;
+  renderAll();
+});
+document.getElementById('btnRefresh').addEventListener('click', renderAll);
+['tp','sl','earnDays'].forEach(id=>document.getElementById(id).addEventListener('change', renderAll));
+
+document.getElementById('btnNotif').addEventListener('click', async ()=>{
+  if(Notification && Notification.permission !== 'granted'){
+    await Notification.requestPermission();
+  }
+  if(Notification.permission==='granted'){
+    startAlerts();
+    new Notification('🔔 เปิดการแจ้งเตือนแล้ว', { body:'ระบบจะเช็คราคา/กำไรทุก 1 นาที' });
+  }else{
+    alert('ไม่สามารถเปิดการแจ้งเตือน: เบราว์เซอร์ไม่อนุญาต');
+  }
 });
 
-// Bind
-document.getElementById('btnAddTrade').addEventListener('click', addTrade);
-document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
-document.getElementById('btnClearAll').addEventListener('click', clearAll);
-
 // Init
-(function init(){
-  const s = getSettings();
-  document.getElementById('setTP').value = s.tp;
-  document.getElementById('setSL').value = s.sl;
-  document.getElementById('setE').value = s.earnDays;
-  document.getElementById('tradeDate').value = new Date().toISOString().slice(0,10);
-  renderPortfolio();
-})();
+renderAll();
