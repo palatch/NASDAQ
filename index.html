@@ -4,12 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0D1117" />
-  <title>Dime Advisor — Bitkub</title>
-  <link rel="manifest" href="manifest.webmanifest?v=advisor-v3-ocr-detail">
+  <title>Dime Logger — Bitkub</title>
+  <link rel="manifest" href="manifest.webmanifest?v=fullsite-v4-2025-08-10">
   <link rel="apple-touch-icon" href="icon-192.png" />
   <script>
-    window.FINNHUB_API_KEY = "d24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0";
-    window.APP_VERSION = "advisor-v3-ocr-detail";
+    window.APP_VERSION = "fullsite-v4-2025-08-10";
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -18,7 +17,7 @@
     :root{--bg:#0D1117;--panel:#0f131a;--line:#1f2632;--text:#E6EDF3;--muted:#9AA4B2;--green:#00C087;--red:#F05454;--amber:#ffb020}
     body{background:var(--bg);color:var(--text)}
     .card{background:#0f131a;border:1px solid var(--line);border-radius:16px}
-    input,button{border-radius:12px}
+    input,select,button{border-radius:12px}
     .btn{padding:.8rem 1rem;border-radius:12px}
     .btn-primary{background:var(--green);color:#062b21;font-weight:700}
     .pill{background:#0f1726;border:1px solid #223048;border-radius:999px;padding:.35rem .6rem}
@@ -32,15 +31,27 @@
 <body class="min-h-screen flex flex-col">
   <header class="p-4 sticky top-0 z-30" style="background:#0c121b;border-bottom:1px solid var(--line)">
     <div class="flex items-center justify-between">
-      <div class="font-bold text-lg">Dime Advisor — Bitkub</div>
+      <div class="font-bold text-lg">Dime Logger — Bitkub</div>
       <div class="text-xs muted">เวอร์ชัน: <span id="ver"></span></div>
     </div>
-    <div class="text-[11px] muted mt-1">อัปภาพจาก Dime → OCR อัตโนมัติ · คำนวณกำไร · เตือนงบ · แนะนำขาย/ถือ · สรุปปันผล</div>
+    <div class="text-[11px] muted mt-1">อัปภาพจาก Dime → OCR เติมฟอร์ม → บันทึกพอร์ต · ดึงราคาจริง (ถ้าใส่ API key) · ปันผล</div>
   </header>
 
   <main class="flex-1 p-4 space-y-4">
+    <!-- Settings -->
     <section class="card p-4">
-      <h2 class="font-semibold">📷 อัปโหลดภาพจาก Dime (OCR บนมือถือ)</h2>
+      <h2 class="font-semibold">การตั้งค่า</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
+        <input id="cfg-finnhub" placeholder="Finnhub API Key (วางที่นี่ เก็บไว้ในเครื่องคุณเอง)" />
+        <input id="cfg-vision" placeholder="Vision Endpoint (ถ้ามี) เช่น https://.../ocr" />
+        <button id="btnSaveCfg" class="btn" style="background:#1f2632">บันทึกการตั้งค่า</button>
+      </div>
+      <div class="text-xs muted mt-2">* ไม่จำเป็นต้องใส่ก็ใช้งานได้ (จะใช้ OCR บนอุปกรณ์แทน และไม่ดึงราคาจริง)</div>
+    </section>
+
+    <!-- OCR upload -->
+    <section class="card p-4">
+      <h2 class="font-semibold">📷 อัปโหลดภาพจาก Dime (OCR)</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
         <label class="btn btn-primary text-center">
           <input id="fileList" type="file" accept="image/*" capture="environment" class="hidden">
@@ -54,44 +65,61 @@
       <div id="ocrStatus" class="text-xs muted mt-2">ยังไม่ได้อัปภาพ</div>
     </section>
 
+    <!-- Form preview -->
     <section class="card p-4">
-      <h2 class="font-semibold">เกณฑ์คำแนะนำ & การแจ้งเตือน</h2>
-      <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
+      <h2 class="font-semibold">บันทึกซื้อ–ขาย (พรีวิวจาก OCR • แก้ไขได้ก่อนบันทึก)</h2>
+      <div class="grid grid-cols-2 gap-2 mt-3 text-sm">
+        <input id="qa-date"    placeholder="วันที่ (YYYY-MM-DD HH:mm:ss)" />
+        <select id="qa-side"><option>BUY</option><option>SELL</option><option>DIV</option><option>FEE</option></select>
+        <input id="qa-symbol"  placeholder="สัญลักษณ์ เช่น TSLA" />
+        <input id="qa-qty"     type="number" step="0.0000001" placeholder="จำนวนหุ้น" />
+        <input id="qa-price"   type="number" step="0.0000001" placeholder="ราคาต่อหุ้น (USD)" />
+        <input id="qa-fee"     type="number" step="0.01" placeholder="ค่าธรรมเนียมรวม (USD)" />
+        <input id="qa-note"    placeholder="หมายเหตุ" />
+      </div>
+      <div class="mt-3 flex gap-2">
+        <button id="btnSave" class="px-3 py-2" style="background:#1f2632;border-radius:12px">บันทึกลงพอร์ต</button>
+        <button id="btnClear" class="px-3 py-2" style="background:#2a171a;color:#f2b8b8;border-radius:12px">ล้างฟอร์ม</button>
+      </div>
+      <div id="formErr" class="text-xs mt-2" style="color:#ffb4b4"></div>
+    </section>
+
+    <!-- Portfolio -->
+    <section class="card p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">พอร์ตของฉัน & คำแนะนำ</h2>
+        <div class="flex gap-2">
+          <button id="btnEnableNotify" class="px-3 py-2" style="background:#1f2632;border-radius:12px">อนุญาตแจ้งเตือน</button>
+          <button id="btnRefresh" class="px-3 py-2" style="background:#1f2632;border-radius:12px">รีเฟรชข้อมูล</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-sm mt-2">
         <div><label class="muted text-xs">TP %</label><input id="tp" type="number" step="0.1" value="5" class="w-full px-3 py-2"></div>
         <div><label class="muted text-xs">SL %</label><input id="sl" type="number" step="0.1" value="-10" class="w-full px-3 py-2"></div>
         <div><label class="muted text-xs">งบใกล้ออก (วัน)</label><input id="earnDays" type="number" step="1" value="3" class="w-full px-3 py-2"></div>
       </div>
-      <div class="mt-2 flex gap-2">
-        <button id="btnEnableNotify" class="px-3 py-2" style="background:#1f2632;border-radius:12px">อนุญาตแจ้งเตือน</button>
-        <button id="btnRefresh" class="px-3 py-2" style="background:#1f2632;border-radius:12px">รีเฟรชข้อมูล</button>
-      </div>
-      <div class="text-xs muted mt-2">ระบบจะตรวจราคา/กำไรทุก ๆ ~60 วินาที เมื่อเปิดหน้าเว็บหรือเพิ่มลง Home Screen (PWA)</div>
-    </section>
-
-    <section class="card p-4">
-      <div class="flex items-center justify_between">
-        <h2 class="font-semibold">พอร์ตของฉัน & คำแนะนำ</h2>
-      </div>
       <div id="portfolio" class="mt-3 grid grid-cols-1 gap-3"></div>
     </section>
 
+    <!-- Dividend summary -->
     <section class="card p-4">
       <h2 class="font-semibold">สรุปเงินปันผล (USD)</h2>
       <div id="divSummary" class="text-sm mt-2"></div>
       <canvas id="divChart" class="mt-3"></canvas>
     </section>
 
+    <!-- Raw OCR debug -->
     <section class="card p-4">
       <h2 class="font-semibold">ข้อความจาก OCR (ดีบัก)</h2>
       <pre id="raw" class="text-xs whitespace-pre-wrap mt-2"></pre>
     </section>
   </main>
 
-  <footer class="p-4 text-center text-xs muted">PWA · ข้อมูลเก็บเฉพาะในเครื่อง · ไม่ส่งรูปออกนอกเครื่อง</footer>
+  <footer class="p-4 text-center text-xs muted">PWA · เก็บข้อมูลเฉพาะในเครื่อง · Vision Endpoint และ API Key (ถ้าตั้ง) จะเก็บเฉพาะในเครื่อง</footer>
 
-  <script src="app.js?v=advisor-v3-ocr-detail"></script>
+  <script src="app.js?v=fullsite-v4-2025-08-10"></script>
   <script>
-    if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=advisor-v3-ocr-detail')); }
+    if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=fullsite-v4-2025-08-10'));}
     document.getElementById('ver').textContent = window.APP_VERSION;
   </script>
 </body>
