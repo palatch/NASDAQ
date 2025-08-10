@@ -1,92 +1,90 @@
-document.getElementById('startOCR').addEventListener('click', () => {
-  const input = document.getElementById('imageInput');
-  const canvas = document.getElementById('canvasPreview');
-  const ctx = canvas.getContext('2d');
-  const file = input.files[0];
+document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+document.getElementById('tradeForm').addEventListener('submit', saveTrade);
+
+function handleImageUpload(event) {
+  const file = event.target.files[0];
   if (!file) return;
-
-  const img = new Image();
-  img.onload = () => {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    Tesseract.recognize(img, 'eng+tha').then(({ data: { text } }) => {
-      document.getElementById('ocrText').value = text;
-      parseOCR(text);
-    });
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.getElementById('previewCanvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = e.target.result;
   };
-  img.src = URL.createObjectURL(file);
-});
-
-function parseOCR(text) {
-  const form = document.getElementById('tradeForm');
-  const side = /ขาย/.test(text) ? 'SELL' : 'BUY';
-  const symbol = text.match(/[A-Z]{2,5}/)?.[0] || '';
-  const qty = text.match(/(\d{1,5})\s*หุ้น/)?.[1] || '';
-  const price = text.match(/ราคา.?(\d+(\.\d+)?)/)?.[1] || '';
-  const fee = text.match(/ค่าธรรมเนียม.?(\d+(\.\d+)?)/)?.[1] || '';
-  const date = new Date().toISOString().slice(0,16);
-
-  form.date.value = date;
-  form.side.value = side;
-  form.symbol.value = symbol;
-  form.qty.value = qty;
-  form.price.value = price;
-  form.fee.value = fee;
+  reader.readAsDataURL(file);
 }
 
-document.getElementById('tradeForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const data = {
-    date: document.getElementById('date').value,
-    side: document.getElementById('side').value,
-    symbol: document.getElementById('symbol').value,
-    qty: parseFloat(document.getElementById('qty').value),
-    price: parseFloat(document.getElementById('price').value),
-    fee: parseFloat(document.getElementById('fee').value),
-    note: document.getElementById('note').value,
-    timestamp: Date.now()
-  };
-  const portfolio = JSON.parse(localStorage.getItem('portfolio') || '[]');
-  portfolio.push(data);
-  localStorage.setItem('portfolio', JSON.stringify(portfolio));
-  alert('บันทึกเรียบร้อย');
+document.getElementById('startOCR').addEventListener('click', () => {
+  const canvas = document.getElementById('previewCanvas');
+  if (canvas.width === 0) return;
+  const dataURL = canvas.toDataURL('image/png');
+  Tesseract.recognize(dataURL, 'eng+tha', {
+    logger: m => console.log(m)
+  }).then(({ data: { text } }) => {
+    document.getElementById('ocrResult').textContent = text;
+    parseOCRText(text);
+  });
 });
 
-document.getElementById('refreshPortfolio').addEventListener('click', () => {
-  const tp = parseFloat(document.getElementById('tp').value);
-  const sl = parseFloat(document.getElementById('sl').value);
-  const portfolio = JSON.parse(localStorage.getItem('portfolio') || '[]');
-  const summary = {};
+function parseOCRText(text) {
+  const type = text.includes('ซื้อ') ? 'BUY' : text.includes('ขาย') ? 'SELL' : '';
+  const symbolMatch = text.match(/[A-Z]{2,5}/);
+  const qtyMatch = text.match(/([0-9]+)\s*หุ้น/);
+  const priceMatch = text.match(/ราคา\s*([0-9.]+)/);
+  const feeMatch = text.match(/ค่าธรรมเนียม\s*([0-9.]+)/);
+  const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
 
-  portfolio.forEach(trade => {
-    const sym = trade.symbol;
-    if (!summary[sym]) summary[sym] = { qty: 0, cost: 0 };
-    if (trade.side === 'BUY') {
-      summary[sym].qty += trade.qty;
-      summary[sym].cost += trade.qty * trade.price + (trade.fee || 0);
-    } else if (trade.side === 'SELL') {
-      summary[sym].qty -= trade.qty;
-      summary[sym].cost -= trade.qty * trade.price;
+  if (type) document.getElementById('tradeType').value = type;
+  if (symbolMatch) document.getElementById('symbol').value = symbolMatch[0];
+  if (qtyMatch) document.getElementById('quantity').value = qtyMatch[1];
+  if (priceMatch) document.getElementById('price').value = priceMatch[1];
+  if (feeMatch) document.getElementById('fee').value = feeMatch[1];
+  if (dateMatch) document.getElementById('tradeDate').value = dateMatch[1] + 'T00:00';
+}
+
+function saveTrade(e) {
+  e.preventDefault();
+  const trade = {
+    date: document.getElementById('tradeDate').value,
+    type: document.getElementById('tradeType').value,
+    symbol: document.getElementById('symbol').value,
+    quantity: parseFloat(document.getElementById('quantity').value),
+    price: parseFloat(document.getElementById('price').value),
+    fee: parseFloat(document.getElementById('fee').value || 0),
+    note: document.getElementById('note').value
+  };
+  const trades = JSON.parse(localStorage.getItem('trades') || '[]');
+  trades.push(trade);
+  localStorage.setItem('trades', JSON.stringify(trades));
+  displayPortfolio();
+}
+
+function displayPortfolio() {
+  const trades = JSON.parse(localStorage.getItem('trades') || '[]');
+  const portfolio = {};
+  trades.forEach(t => {
+    if (!portfolio[t.symbol]) portfolio[t.symbol] = { quantity: 0, cost: 0 };
+    if (t.type === 'BUY') {
+      portfolio[t.symbol].quantity += t.quantity;
+      portfolio[t.symbol].cost += t.quantity * t.price + t.fee;
+    } else if (t.type === 'SELL') {
+      portfolio[t.symbol].quantity -= t.quantity;
+      portfolio[t.symbol].cost -= t.quantity * t.price;
     }
   });
-
-  const container = document.getElementById('portfolioCards');
+  const container = document.getElementById('portfolioDisplay');
   container.innerHTML = '';
-  Object.keys(summary).forEach(sym => {
-    const avgPrice = summary[sym].cost / summary[sym].qty;
-    const currentPrice = avgPrice * (1 + tp / 100); // mock price
-    const gain = (currentPrice - avgPrice) * summary[sym].qty;
-    const tag = gain > 0 ? '✅ ถือ' : gain < 0 ? '⚠️ ขาดทุน' : '➖';
-
-    const card = document.createElement('div');
-    card.className = 'portfolio-card';
-    card.innerHTML = `<strong>${sym}</strong><br>
-      จำนวน: ${summary[sym].qty}<br>
-      ราคาทุนเฉลี่ย: ${avgPrice.toFixed(2)}<br>
-      ราคาปัจจุบัน: ${currentPrice.toFixed(2)}<br>
-      กำไร/ขาดทุน: ${gain.toFixed(2)}<br>
-      คำแนะนำ: ${tag}`;
-    container.appendChild(card);
+  Object.keys(portfolio).forEach(symbol => {
+    const p = portfolio[symbol];
+    const avgPrice = p.quantity ? (p.cost / p.quantity).toFixed(2) : 0;
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `<strong>${symbol}</strong><br>จำนวน: ${p.quantity}<br>ราคาทุนเฉลี่ย: ${avgPrice}`;
+    container.appendChild(div);
   });
-});
+}

@@ -11,50 +11,45 @@
 <body>
   <header>
     <div class="logo">📘 DimeLogger</div>
-    <div class="version">v1.0</div>
-    <p class="description">อัปโหลด → OCR → เติมฟอร์ม → วิเคราะห์พอร์ต → แจ้งเตือน TP/SL</p>
+    <div class="version">v1.0.0</div>
   </header>
 
   <main>
     <section class="upload-section">
-      <h2>📤 อัปโหลดรูปสลิป</h2>
-      <input type="file" id="imageInput" accept="image/*" capture="false" />
-      <canvas id="canvasPreview"></canvas>
+      <h2>อัปโหลดรูปสลิป</h2>
+      <input type="file" id="imageInput" accept="image/*" />
+      <canvas id="previewCanvas"></canvas>
       <button id="startOCR">เริ่ม OCR</button>
-      <textarea id="ocrText" placeholder="ข้อความ OCR จะปรากฏที่นี่..."></textarea>
+      <div id="ocrResult"></div>
     </section>
 
     <section class="form-section">
-      <h2>📝 ฟอร์มบันทึก</h2>
+      <h2>ฟอร์มซื้อ–ขาย</h2>
       <form id="tradeForm">
-        <input type="datetime-local" id="date" required />
-        <select id="side">
+        <input type="datetime-local" id="tradeDate" required />
+        <select id="tradeType">
           <option value="BUY">ซื้อ</option>
           <option value="SELL">ขาย</option>
           <option value="DIV">ปันผล</option>
           <option value="FEE">ค่าธรรมเนียม</option>
         </select>
         <input type="text" id="symbol" placeholder="ชื่อหุ้น" required />
-        <input type="number" id="qty" placeholder="จำนวนหุ้น" required />
+        <input type="number" id="quantity" placeholder="จำนวนหุ้น" required />
         <input type="number" id="price" placeholder="ราคาต่อหุ้น" required />
         <input type="number" id="fee" placeholder="ค่าธรรมเนียมรวม" />
         <input type="text" id="note" placeholder="หมายเหตุ" />
-        <button type="submit">💾 บันทึกเข้าพอร์ต</button>
-        <button type="reset">🧹 ล้างฟอร์ม</button>
+        <button type="submit">บันทึกเข้าพอร์ต</button>
       </form>
     </section>
 
     <section class="portfolio-section">
-      <h2>📊 พอร์ตหุ้น</h2>
-      <label>TP (%): <input type="number" id="tp" value="10" /></label>
-      <label>SL (%): <input type="number" id="sl" value="-5" /></label>
-      <button id="refreshPortfolio">🔄 รีเฟรชพอร์ต</button>
-      <div id="portfolioCards"></div>
+      <h2>พอร์ตหุ้น</h2>
+      <div id="portfolioDisplay"></div>
     </section>
   </main>
 
   <footer>
-    <p>DimeLogger v1.0</p>
+    <div class="version">DimeLogger v1.0.0</div>
   </footer>
 
   <script src="script.js"></script>
