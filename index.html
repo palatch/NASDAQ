@@ -1,25 +1,62 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dime Logger — Split (NoVision)</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='50%' x='50%' dominant-baseline='middle' text-anchor='middle' font-size='60'>📈</text></svg>">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DimeLogger — Single (NoVision)</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <div class="logo">Dime Logger — Split (NoVision)</div>
-    <div class="version">v16_2025_08_10</div>
-    <div class="description">อัปโหลด → ประมวลผล → OCR → เติมฟอร์ม → บันทึกพอร์ต → ดึงราคาจริง/ปันผล</div>
+    <div class="logo">📈 DimeLogger — Single (NoVision)</div>
+    <div class="version">single-novision-v16-2025-08-10</div>
+    <p class="subtitle">อัปโหลด → ประมวลผล → OCR → เติมฟอร์ม → บันทึกพอร์ต → ดึงราคาจริง/ปันผล</p>
   </header>
+
   <main>
-    <!-- UI Components will be dynamically added by script.js -->
+    <section class="upload-section">
+      <h2>📤 อัปโหลดรูปสลิป</h2>
+      <input type="file" id="imageInput" accept="image/*" capture="false" />
+      <label><input type="checkbox" id="useOpenCV" /> ใช้ปรับภาพขั้นสูง (OpenCV)</label>
+      <div id="imagePreview"></div>
+      <button id="startOCR">เริ่ม OCR</button>
+      <p id="ocrStatus"></p>
+    </section>
+
+    <section class="ocr-debug">
+      <h2>🧾 ข้อความ OCR</h2>
+      <textarea id="ocrText" rows="6"></textarea>
+      <button id="convertText">แปลงข้อความเป็นข้อมูลฟอร์ม</button>
+    </section>
+
+    <section class="form-section">
+      <h2>📝 ฟอร์มบันทึกการซื้อ–ขาย</h2>
+      <form id="tradeForm">
+        <input type="datetime-local" id="date" required />
+        <select id="side">
+          <option value="BUY">BUY</option>
+          <option value="SELL">SELL</option>
+          <option value="DIV">DIV</option>
+          <option value="FEE">FEE</option>
+        </select>
+        <input type="text" id="symbol" placeholder="ชื่อหุ้น" required />
+        <input type="number" id="qty" placeholder="จำนวนหุ้น" required />
+        <input type="number" id="price" placeholder="ราคาต่อหุ้น" required />
+        <input type="number" id="fee" placeholder="ค่าธรรมเนียมรวม" />
+        <input type="text" id="note" placeholder="หมายเหตุ" />
+        <button type="submit">บันทึกเข้าพอร์ต</button>
+        <button type="reset">ล้างฟอร์ม</button>
+      </form>
+    </section>
   </main>
+
   <footer>
-    <div class="version">v16_2025_08_10 - index.html</div>
+    <p>single-novision-v16-2025-08-10 — DimeLogger</p>
   </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
