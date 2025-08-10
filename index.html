@@ -1,34 +1,60 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DimeLogger - NoVision</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DimeLogger</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <h1>DimeLogger — Single (NoVision)</h1>
-    <span class="version">single-novision-v16-2025-08-10</span>
-    <p class="subtitle">อัปโหลด → ประมวลผล → OCR → เติมฟอร์ม → บันทึกพอร์ต → ดึงราคาจริง/ปันผล</p>
+    <div class="logo">📘 DimeLogger</div>
+    <div class="version">v1.0</div>
+    <p class="description">อัปโหลด → OCR → เติมฟอร์ม → วิเคราะห์พอร์ต → แจ้งเตือน TP/SL</p>
   </header>
 
   <main>
-    <section>
+    <section class="upload-section">
       <h2>📤 อัปโหลดรูปสลิป</h2>
-      <input type="file" id="imageInput" accept="image/*" capture="false">
-      <label><input type="checkbox" id="useOpenCV"> ใช้ปรับภาพขั้นสูง (OpenCV)</label>
-      <div id="imagePreview"></div>
+      <input type="file" id="imageInput" accept="image/*" capture="false" />
+      <canvas id="canvasPreview"></canvas>
       <button id="startOCR">เริ่ม OCR</button>
-      <div id="ocrStatus"></div>
+      <textarea id="ocrText" placeholder="ข้อความ OCR จะปรากฏที่นี่..."></textarea>
+    </section>
+
+    <section class="form-section">
+      <h2>📝 ฟอร์มบันทึก</h2>
+      <form id="tradeForm">
+        <input type="datetime-local" id="date" required />
+        <select id="side">
+          <option value="BUY">ซื้อ</option>
+          <option value="SELL">ขาย</option>
+          <option value="DIV">ปันผล</option>
+          <option value="FEE">ค่าธรรมเนียม</option>
+        </select>
+        <input type="text" id="symbol" placeholder="ชื่อหุ้น" required />
+        <input type="number" id="qty" placeholder="จำนวนหุ้น" required />
+        <input type="number" id="price" placeholder="ราคาต่อหุ้น" required />
+        <input type="number" id="fee" placeholder="ค่าธรรมเนียมรวม" />
+        <input type="text" id="note" placeholder="หมายเหตุ" />
+        <button type="submit">💾 บันทึกเข้าพอร์ต</button>
+        <button type="reset">🧹 ล้างฟอร์ม</button>
+      </form>
+    </section>
+
+    <section class="portfolio-section">
+      <h2>📊 พอร์ตหุ้น</h2>
+      <label>TP (%): <input type="number" id="tp" value="10" /></label>
+      <label>SL (%): <input type="number" id="sl" value="-5" /></label>
+      <button id="refreshPortfolio">🔄 รีเฟรชพอร์ต</button>
+      <div id="portfolioCards"></div>
     </section>
   </main>
 
   <footer>
-    <p>single-novision-v16-2025-08-10 — DimeLogger</p>
+    <p>DimeLogger v1.0</p>
   </footer>
 
   <script src="script.js"></script>
