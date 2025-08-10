@@ -1,6 +1,6 @@
 // ===== Versioned storage =====
-const LS_TRADES='dm_adv_trades_v4';
-const LS_CFG='dm_cfg_v4';
+const LS_TRADES='dm_adv_trades_v5';
+const LS_CFG='dm_cfg_v5';
 
 function getTrades(){ try{return JSON.parse(localStorage.getItem(LS_TRADES))||[]}catch{return[]} }
 function setTrades(v){ localStorage.setItem(LS_TRADES, JSON.stringify(v)); }
@@ -14,9 +14,16 @@ function setCfg(v){ localStorage.setItem(LS_CFG, JSON.stringify(v)); }
   document.getElementById('cfg-vision').value  = cfg.vision||'';
   document.getElementById('btnSaveCfg').addEventListener('click',()=>{
     setCfg({finnhub:document.getElementById('cfg-finnhub').value.trim(), vision:document.getElementById('cfg-vision').value.trim()});
-    alert('บันทึกการตั้งค่าแล้ว ✅');
+    setMsg('บันทึกการตั้งค่าแล้ว ✅');
   });
+  document.getElementById('btnClearKey').addEventListener('click',()=>{
+    const c=getCfg(); c.finnhub=''; setCfg(c);
+    document.getElementById('cfg-finnhub').value=''; setMsg('ลบคีย์ Finnhub ออกจากเครื่องแล้ว');
+  });
+  document.getElementById('btnTestKey').addEventListener('click', testFinnhubKey);
 })();
+
+function setMsg(m){ document.getElementById('cfgMsg').textContent=m; setTimeout(()=>{document.getElementById('cfgMsg').textContent='คีย์และเอ็นด์พอยต์จะถูกเก็บในเครื่องของคุณ ไม่ถูกส่งออก';}, 6000); }
 
 // ===== Utils =====
 const TH_MONTH = {"ม.ค.":1,"ก.พ.":2,"มี.ค.":3,"เม.ย.":4,"พ.ค.":5,"มิ.ย.":6,"ก.ค.":7,"ส.ค.":8,"ก.ย.":9,"ต.ค.":10,"พ.ย.":11,"ธ.ค.":12};
@@ -61,19 +68,14 @@ function fillQuickAddForm(fields){
 // ===== Parse detail page (en+th tolerant) to fields =====
 function parseDetailToFields(text){
   const T = text.replace(/\t/g,' ').split('\n').map(s=>s.trim()).filter(Boolean).join('\n');
-
-  // Side + Symbol
-  let side = null, symbol = null;
+  let side=null, symbol=null;
   let mHead = T.match(/^(BUY|SELL)\s+([A-Z0-9\.]+)/mi);
   if(mHead){ side=mHead[1]; symbol=mHead[2]; }
   if(!mHead){
     const th = T.match(/^(ซื้อ|ขาย)\s+([A-Z0-9\.]+)/mi);
     if(th){ side = th[1]==='ซื้อ'?'BUY':'SELL'; symbol = th[2]; }
   }
-
-  // Numbers
   const getNum = (re) => { const m = T.match(re); return m? parseFloat(m[1].replace(/,/g,'')) : null; };
-
   const price = getNum(/(ราคาที่ได้จริง|Actual\s*price|Price\s*(got|received))\s*[: ]\s*([0-9.,]+)/i);
   const qty   = getNum(/(จำนวนหุ้น|Shares?|Quantity)\s*[: ]\s*([0-9.,]+)/i) || getNum(/([0-9.,]+)\s*(หุ้น|shares?)/i);
   let feeTotal=0;
@@ -81,11 +83,8 @@ function parseDetailToFields(text){
   const fee2  = getNum(/TAF\s*Fee\s*[: ]\s*(-?[0-9.,]+)/i) || 0;
   const fee3  = getNum(/VAT\s*[: ]\s*(-?[0-9.,]+)/i) || 0;
   feeTotal = (fee1||0)+(fee2||0)+(fee3||0);
-
   const total = getNum(/(Amount\s*(to\s*pay|due)|Amount\s*(to\s*receive))\s*[: ]\s*([0-9.,]+)/i) 
              || getNum(/ยอดที่(ต้องชำระ|จะได้รับคืน)\s*([0-9.,]+)/i);
-
-  // Date
   let date = null;
   const md = T.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(:\d{2})?)/);
   if(md) date = `${md[1]} ${md[2].slice(0,8)}`;
@@ -93,15 +92,27 @@ function parseDetailToFields(text){
     const dt = T.match(/(\d{1,2}\s+[ก-๙\.]+\s+(256\d|\d{2}).*?\d{2}:\d{2}(:\d{2})?)/);
     if(dt) date = parseThaiDate(dt[1]);
   }
-
   return { side, symbol, qty, price, fee:feeTotal||0, total, date, note:'OCR' };
 }
 
-// ===== Market data =====
+// ===== Market data & validation =====
 async function fetchQuote(symbol){
-  const key = (getCfg().finnhub||'').trim(); if(!key) return null;
+  const key=(getCfg().finnhub||'').trim(); if(!key) return null;
   const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`;
-  try{ const r=await fetch(url); if(!r.ok) return null; return await r.json(); }catch{return null}
+  try{ const r=await fetch(url); if(!r.ok) return null; const j=await r.json(); return j; }catch{return null}
+}
+async function testFinnhubKey(){
+  const key=(getCfg().finnhub||'').trim() || document.getElementById('cfg-finnhub').value.trim();
+  if(!key){ setMsg('กรุณาใส่ Finnhub API Key ก่อน'); return; }
+  setMsg('กำลังทดสอบคีย์...');
+  try{
+    const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=AAPL&token=${key}`);
+    if(!r.ok){ setMsg('คีย์ไม่ผ่าน: HTTP '+r.status); return; }
+    const j=await r.json();
+    if(j && typeof j.c === 'number'){ setMsg('คีย์ใช้ได้ ✅ (ดึงราคา AAPL ได้)'); }
+    else if(j && j.error){ setMsg('คีย์ไม่ผ่าน: '+j.error); }
+    else{ setMsg('คีย์อาจไม่ถูกต้องหรือโควต้าเต็ม'); }
+  }catch(e){ setMsg('ทดสอบคีย์ล้มเหลว: '+e.message); }
 }
 
 async function fetchDividends(symbol){
@@ -121,9 +132,7 @@ function inferDividendFreq(divs){
   if(avg<120) return 'รายครึ่งปี (คาด)';
   return 'รายปี (คาด)';
 }
-
-// ===== Advice helpers =====
-function slope5(c){ if(!c) return 0; const arr=c.c||[]; const last=arr.slice(-5); if(last.length<2) return 0; return (last[last.length-1]-last[0])/last[0]*100; }
+function slope5(c){ if(!c) return 0; const arr=c?.c||[]; const last=arr.slice(-5); if(last.length<2) return 0; return (last[last.length-1]-last[0])/last[0]*100; }
 async function fetchCandles(symbol){
   const key=(getCfg().finnhub||'').trim(); if(!key) return null;
   try{ const now=Math.floor(Date.now()/1000), from=now-86400*8;
@@ -202,7 +211,7 @@ async function renderPortfolio(){
   box.innerHTML = items.map(x=>{
     const pnlCls = x.pnl>=0?'color:var(--green)':'color:var(--red)';
     const tagHtml = x.adv.tags.map(t=>`<span class="tag ${t.t}">${t.k}</span>`).join(' ');
-    const earnTxt = x.earn? `<div class="text-xs muted">งบ: ${x.earn.date||x.earn.EPSReportDate||''}</div>`:'';
+    const earnTxt = x.earn? `<div class="text-xs muted">งบ: ${x.earn?.date||x.earn?.EPSReportDate||''}</div>`:'';
     const divTxt = x.dividend? `<span class="tag t-amber">หุ้นปันผล${x.freq?(' · '+x.freq):''}</span>`:'';
     return `<div class="p-4 card">
       <div class="flex items-center justify-between">

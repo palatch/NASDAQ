@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0D1117" />
   <title>Dime Logger — Bitkub</title>
-  <link rel="manifest" href="manifest.webmanifest?v=fullsite-v4-2025-08-10">
+  <link rel="manifest" href="manifest.webmanifest?v=fullsite-v5-2025-08-10">
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <script>
-    window.APP_VERSION = "fullsite-v4-2025-08-10";
-  </script>
+  <script>window.APP_VERSION="fullsite-v5-2025-08-10";</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -34,7 +32,7 @@
       <div class="font-bold text-lg">Dime Logger — Bitkub</div>
       <div class="text-xs muted">เวอร์ชัน: <span id="ver"></span></div>
     </div>
-    <div class="text-[11px] muted mt-1">อัปภาพจาก Dime → OCR เติมฟอร์ม → บันทึกพอร์ต · ดึงราคาจริง (ถ้าใส่ API key) · ปันผล</div>
+    <div class="text-[11px] muted mt-1">OCR เติมฟอร์ม → บันทึกพอร์ต · ราคาจริง (Finnhub) · ปันผล · พรีวิว/ตรวจความถูกต้อง</div>
   </header>
 
   <main class="flex-1 p-4 space-y-4">
@@ -42,11 +40,15 @@
     <section class="card p-4">
       <h2 class="font-semibold">การตั้งค่า</h2>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
-        <input id="cfg-finnhub" placeholder="Finnhub API Key (วางที่นี่ เก็บไว้ในเครื่องคุณเอง)" />
-        <input id="cfg-vision" placeholder="Vision Endpoint (ถ้ามี) เช่น https://.../ocr" />
-        <button id="btnSaveCfg" class="btn" style="background:#1f2632">บันทึกการตั้งค่า</button>
+        <input id="cfg-finnhub" placeholder="Finnhub API Key (เก็บในมือถือคุณเท่านั้น)" />
+        <input id="cfg-vision" placeholder="Vision Endpoint (https://.../ocr) ถ้าไม่มีให้ว่างไว้" />
+        <div class="flex gap-2">
+          <button id="btnSaveCfg" class="btn" style="background:#1f2632">บันทึก</button>
+          <button id="btnTestKey" class="btn" style="background:#0e2b1f">ทดสอบคีย์</button>
+          <button id="btnClearKey" class="btn" style="background:#2a171a;color:#f2b8b8">ล้างคีย์</button>
+        </div>
       </div>
-      <div class="text-xs muted mt-2">* ไม่จำเป็นต้องใส่ก็ใช้งานได้ (จะใช้ OCR บนอุปกรณ์แทน และไม่ดึงราคาจริง)</div>
+      <div id="cfgMsg" class="text-xs mt-2 muted">คีย์และเอ็นด์พอยต์จะถูกเก็บในเครื่องของคุณ ไม่ถูกส่งออก</div>
     </section>
 
     <!-- OCR upload -->
@@ -117,10 +119,7 @@
 
   <footer class="p-4 text-center text-xs muted">PWA · เก็บข้อมูลเฉพาะในเครื่อง · Vision Endpoint และ API Key (ถ้าตั้ง) จะเก็บเฉพาะในเครื่อง</footer>
 
-  <script src="app.js?v=fullsite-v4-2025-08-10"></script>
-  <script>
-    if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=fullsite-v4-2025-08-10'));}
-    document.getElementById('ver').textContent = window.APP_VERSION;
-  </script>
+  <script src="app.js?v=fullsite-v5-2025-08-10"></script>
+  <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=fullsite-v5-2025-08-10'));}; document.getElementById('ver').textContent=window.APP_VERSION;</script>
 </body>
 </html>
