@@ -1,106 +1,132 @@
 
 <!DOCTYPE html>
+
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <title>ระบบแจ้งเตือน TP/SL + วิเคราะห์ข่าว</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      margin: 0;
-      background-color: #f9f9f9;
-    }
-    h2, h3 {
-      text-align: center;
-    }
-    .container {
-      max-width: 500px;
-      margin: auto;
-      background: #fff;
-      padding: 15px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    input, button {
-      padding: 12px;
-      margin: 8px 0;
-      width: 100%;
-      box-sizing: border-box;
-      font-size: 16px;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
-    li {
-      background: #eef;
-      margin-bottom: 10px;
-      padding: 10px;
-      border-radius: 5px;
-    }
-    .stock-actions {
-      margin-top: 5px;
-    }
-    .stock-actions button {
-      background-color: #dc3545;
-      margin-top: 5px;
-    }
-    @media (max-width: 600px) {
-      body {
-        padding: 10px;
-      }
-      .container {
-        padding: 10px;
-      }
-      input, button {
-        font-size: 14px;
-        padding: 10px;
-      }
-    }
-  </style>
-</head>
+<meta charset="utf-8"/>
+<title>ระบบมอนิเตอร์หุ้นมือถือ</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: linear-gradient(to bottom right, #f5f5f5, #dcdcdc);
+  color: #333;
+}
+
+h2, h3 {
+  color: #bfa14f;
+  text-align: center;
+}
+
+input, button {
+  padding: 12px;
+  margin: 8px 0;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+input {
+  background-color: #fff;
+}
+
+button {
+  background: linear-gradient(to right, #d4af37, #c0c0c0);
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+button:hover {
+  background: linear-gradient(to right, #c0c0c0, #d4af37);
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  background-color: #fff;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 10px;
+  }
+
+  input, button {
+    font-size: 14px;
+  }
+
+  li {
+    font-size: 14px;
+  }
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body, h2, h3, ul, li, input, button {
+  animation: fadeIn 0.6s ease-in-out;
+}
+
+/* Hover effects for buttons */
+button {
+  transition: background 0.3s, transform 0.2s;
+}
+button:hover {
+  background: linear-gradient(to right, #ffd700, #c0c0c0);
+  transform: scale(1.05);
+}
+
+/* Icon spacing */
+button i {
+  margin-right: 8px;
+}
+</style><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/></head>
 <body>
-  <div class="container">
-    <h2>📈 เพิ่มหุ้นที่สนใจ</h2>
-    <input type="text" id="symbolInput" placeholder="สัญลักษณ์หุ้น เช่น AAPL" />
-    <input type="number" id="buyPriceInput" placeholder="ราคาซื้อ" />
-    <input type="number" id="tpInput" placeholder="เป้าหมายกำไร (TP)" />
-    <input type="number" id="slInput" placeholder="จุดตัดขาดทุน (SL)" />
-    <button onclick="addStock()">+ เพิ่มหุ้น</button>
-
-    <h3>✅ หุ้นที่เพิ่มแล้ว:</h3>
-    <ul id="stockList"></ul>
-  </div>
-
-  <script>
+<h2><i class="fas fa-chart-line"></i> 📈 เพิ่มหุ้นที่สนใจ</h2>
+<input id="symbolInput" placeholder="สัญลักษณ์หุ้น เช่น AAPL" type="text"/>
+<input id="buyPriceInput" placeholder="ราคาซื้อ" type="number"/>
+<input id="tpInput" placeholder="เป้าหมายกำไร (TP)" type="number"/>
+<input id="slInput" placeholder="จุดตัดขาดทุน (SL)" type="number"/>
+<input id="sharesInput" placeholder="จำนวนหุ้นที่ซื้อ" type="number"/>
+<button onclick="addStock()"><i class="fas fa-plus"></i>+ เพิ่มหุ้น</button>
+<h3><i class="fas fa-list"></i> ✅ หุ้นที่เพิ่มแล้ว:</h3>
+<ul id="stockList"></ul>
+<script>
     const API_KEY = 'd24u9h9r01qu2jgk36cgd24u9h9r01qu2jgk36d0';
     const API_ENDPOINT = 'https://finnhub.io/api/v1';
-    const stockList = document.getElementById('stockList');
 
     function loadStocks() {
       const stocks = JSON.parse(localStorage.getItem('stocks') || '[]');
+      const stockList = document.getElementById('stockList');
       stockList.innerHTML = '';
       stocks.forEach(stock => {
         const li = document.createElement('li');
+        li.className = 'stock-item';
         li.innerHTML = `
           <strong>${stock.symbol}</strong><br>
-          ซื้อที่ ${stock.buyPrice} | TP: ${stock.tp} | SL: ${stock.sl}
-          <div class="stock-actions">
-            <button onclick="removeStock('${stock.symbol}')">🗑️ ลบ</button>
-          </div>
+          ซื้อที่: ${stock.buyPrice} | TP: ${stock.tp} | SL: ${stock.sl} | จำนวน: ${stock.shares}<br>
+          <span id="result-${stock.symbol}">⏳ กำลังโหลดข้อมูล...</span><br>
+          <button class="remove-btn" onclick="removeStock('${stock.symbol}')">ลบ</button>
         `;
         stockList.appendChild(li);
+        updateStockInfo(stock);
       });
     }
 
@@ -109,20 +135,22 @@
       const buyPrice = parseFloat(document.getElementById('buyPriceInput').value);
       const tp = parseFloat(document.getElementById('tpInput').value);
       const sl = parseFloat(document.getElementById('slInput').value);
+      const shares = parseInt(document.getElementById('sharesInput').value);
 
-      if (!symbol || isNaN(buyPrice) || isNaN(tp) || isNaN(sl)) {
+      if (!symbol || isNaN(buyPrice) || isNaN(tp) || isNaN(sl) || isNaN(shares)) {
         alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
         return;
       }
 
       let stocks = JSON.parse(localStorage.getItem('stocks') || '[]');
-      stocks.push({ symbol, buyPrice, tp, sl });
+      stocks.push({ symbol, buyPrice, tp, sl, shares });
       localStorage.setItem('stocks', JSON.stringify(stocks));
 
       document.getElementById('symbolInput').value = '';
       document.getElementById('buyPriceInput').value = '';
       document.getElementById('tpInput').value = '';
       document.getElementById('slInput').value = '';
+      document.getElementById('sharesInput').value = '';
 
       loadStocks();
     }
@@ -134,54 +162,68 @@
       loadStocks();
     }
 
-    function checkAlerts() {
-      const stocks = JSON.parse(localStorage.getItem('stocks') || '[]');
-      stocks.forEach(stock => {
-        fetch(`${API_ENDPOINT}/quote?symbol=${stock.symbol}&token=${API_KEY}`)
-          .then(response => response.json())
-          .then(data => {
-            const currentPrice = data.c;
-            if (currentPrice >= stock.tp) {
-              alert(`🎯 หุ้น ${stock.symbol} ถึงเป้าหมายกำไรแล้ว! (${currentPrice} ≥ ${stock.tp})`);
-            } else if (currentPrice <= stock.sl) {
-              alert(`⚠️ หุ้น ${stock.symbol} ถึงจุดตัดขาดทุน! (${currentPrice} ≤ ${stock.sl})`);
-            }
-          });
+    function updateStockInfo(stock) {
+      fetch(`${API_ENDPOINT}/quote?symbol=${stock.symbol}&token=${API_KEY}`)
+        .then(response => response.json())
+        .then(data => {
+          const currentPrice = data.c;
+          const feeRate = 0.0025;
+          const totalBuy = stock.buyPrice * stock.shares;
+          const totalCurrent = currentPrice * stock.shares;
+          const fee = totalCurrent * feeRate;
+          const profit = totalCurrent - totalBuy - fee;
+          const resultText = `
+            📊 ราคาปัจจุบัน: ${currentPrice.toFixed(2)}<br>
+            💰 กำไร/ขาดทุนหลังหักค่าธรรมเนียม (${(feeRate*100).toFixed(2)}%): ${profit.toFixed(2)} บาท
+          `;
+          document.getElementById(`result-${stock.symbol}`).innerHTML = resultText;
 
-        fetch(`${API_ENDPOINT}/news-sentiment?symbol=${stock.symbol}&token=${API_KEY}`)
-          .then(response => response.json())
-          .then(data => {
-            const sentiment = data.sentiment;
-            if (!sentiment) return;
+          if (currentPrice >= stock.tp) {
+            alert(`🎯 หุ้น ${stock.symbol} ถึงเป้าหมายกำไรแล้ว!`);
+          } else if (currentPrice <= stock.sl) {
+            alert(`⚠️ หุ้น ${stock.symbol} ถึงจุดตัดขาดทุน!`);
+          }
+        });
 
-            const positive = sentiment.positiveScore;
-            const negative = sentiment.negativeScore;
+      fetch(`${API_ENDPOINT}/news-sentiment?symbol=${stock.symbol}&token=${API_KEY}`)
+        .then(response => response.json())
+        .then(data => {
+          const sentiment = data.sentiment;
+          if (!sentiment) return;
+          const positive = sentiment.positiveScore;
+          const negative = sentiment.negativeScore;
+          if (positive > negative) {
+            alert(`📈 ข่าวของ ${stock.symbol} เป็นบวก อาจมีแนวโน้มขึ้น`);
+          } else if (negative > positive) {
+            alert(`📉 ข่าวของ ${stock.symbol} เป็นลบ อาจมีแนวโน้มลง`);
+          } else {
+            alert(`⚖️ ข่าวของ ${stock.symbol} เป็นกลาง`);
+          }
+        });
 
-            if (positive > negative) {
-              alert(`📈 ข่าวของ ${stock.symbol} เป็นบวก อาจมีแนวโน้มขึ้น`);
-            } else if (negative > positive) {
-              alert(`📉 ข่าวของ ${stock.symbol} เป็นลบ อาจมีแนวโน้มลง`);
-            } else {
-              alert(`⚖️ ข่าวของ ${stock.symbol} เป็นกลาง`);
-            }
-          });
+      fetch(`https://finnhub.io/api/v1/indicator?symbol=${stock.symbol}&resolution=D&indicator=rsi&token=${API_KEY}`)
+        .then(res => res.json())
+        .then(data => {
+          const rsi = data?.rsi?.slice(-1)[0];
+          if (rsi > 70) {
+            alert(`📉 RSI ของ ${stock.symbol} สูง (${rsi.toFixed(2)}) อาจถึงจุดขาย`);
+          } else if (rsi < 30) {
+            alert(`📈 RSI ของ ${stock.symbol} ต่ำ (${rsi.toFixed(2)}) อาจถึงจุดซื้อ`);
+          }
+        });
 
-        fetch(`${API_ENDPOINT}/indicator?symbol=${stock.symbol}&resolution=D&indicator=rsi&token=${API_KEY}`)
-          .then(res => res.json())
-          .then(data => {
-            const rsi = data?.rsi?.slice(-1)[0];
-            if (rsi > 70) {
-              alert(`📉 RSI ของ ${stock.symbol} สูง (${rsi}) อาจถึงจุดขาย`);
-            } else if (rsi < 30) {
-              alert(`📈 RSI ของ ${stock.symbol} ต่ำ (${rsi}) อาจถึงจุดซื้อ`);
-            }
-          });
-      });
+      const chartUrl = `https://quickchart.io/chart?c={
+        type:'line',
+        data:{labels:['Mon','Tue','Wed','Thu','Fri'],
+        datasets:[{label:'${stock.symbol}',data:[${stock.buyPrice},${stock.buyPrice+1},${stock.buyPrice+2},${stock.buyPrice+1.5},${stock.buyPrice+2.5}]}]}
+      }`;
+      const img = document.createElement('img');
+      img.src = chartUrl;
+      document.getElementById(`result-${stock.symbol}`).appendChild(img);
     }
 
     loadStocks();
-    checkAlerts();
-    setInterval(checkAlerts, 60 * 60 * 1000);
+    setInterval(loadStocks, 60 * 60 * 1000);
   </script>
 </body>
 </html>
